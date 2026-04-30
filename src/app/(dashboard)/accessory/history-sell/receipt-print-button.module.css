@@ -1,0 +1,181 @@
+.root {
+  display: inline-flex;
+}
+
+.noPrint {
+  display: inline-flex;
+}
+
+.printArea {
+  display: none;
+}
+
+.receipt {
+  width: 58mm;
+  background: #ffffff;
+  color: #000000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 2mm 1.5mm;
+}
+
+.center {
+  text-align: center;
+}
+
+.storeName {
+  margin: 0;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.textMuted {
+  margin: 0.5mm 0;
+}
+
+.logo {
+  max-width: 22mm;
+  max-height: 14mm;
+  object-fit: contain;
+  margin-bottom: 1mm;
+  display: block;
+  margin-inline: auto;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.divider {
+  border-top: 1px solid #000000;
+  margin: 1.5mm 0;
+}
+
+.dividerDashed {
+  border-top: 1px dashed #000000;
+  margin: 1.5mm 0;
+}
+
+.rowFlex {
+  display: flex;
+  justify-content: space-between;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 20mm 2mm 1fr;
+  align-items: start;
+}
+
+.tableLabel {
+  white-space: nowrap;
+}
+
+.tableValue {
+  word-break: break-word;
+}
+
+.itemGrid {
+  display: grid;
+  grid-template-columns: 5mm 1fr;
+  margin-top: 1mm;
+}
+
+.itemNumber {
+  text-align: left;
+}
+
+.itemDetails {
+  display: flex;
+  flex-direction: column;
+}
+
+.itemName {
+  margin: 0;
+  font-weight: normal;
+  text-transform: uppercase;
+}
+
+.itemPriceRow {
+  display: flex;
+  justify-content: space-between;
+}
+
+.itemQty {
+  width: 10mm;
+}
+
+.itemPrice {
+  text-align: right;
+  flex: 1;
+}
+
+.itemTotal {
+  text-align: right;
+  width: 18mm;
+}
+
+.totalsGrid {
+  display: grid;
+  grid-template-columns: 20mm 2mm 1fr;
+  align-items: start;
+}
+
+.totalsLabel {
+  white-space: nowrap;
+}
+
+.totalsValue {
+  text-align: right;
+}
+
+.paymentSection {
+  margin-top: 2mm;
+}
+
+.paymentRow {
+  display: flex;
+  justify-content: space-between;
+}
+
+.paymentMethod {
+  margin-left: 5mm;
+  text-transform: uppercase;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 4mm;
+}
+
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 2mm;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .printArea {
+    display: block;
+  }
+
+  :global(body *) {
+    visibility: hidden;
+  }
+
+  :global(#unit-receipt-print-area),
+  :global(#unit-receipt-print-area *) {
+    visibility: visible;
+  }
+
+  :global(#unit-receipt-print-area) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 58mm;
+    margin: 0;
+    padding: 0;
+  }
+}

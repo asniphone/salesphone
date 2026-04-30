@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Unit" ALTER COLUMN "grossProfit" DROP DEFAULT,
+ALTER COLUMN "netProfit" DROP DEFAULT;

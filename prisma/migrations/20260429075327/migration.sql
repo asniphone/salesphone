@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Unit" ADD COLUMN     "grossProfit" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "netProfit" INTEGER NOT NULL DEFAULT 0;
