@@ -94,6 +94,11 @@ function formatDate(date: Date | null | undefined): string {
 
 interface Props {
   accessory: AccessoryData;
+  userAccess: {
+    accessAccessoryUpdate: boolean;
+    accessAccessoryDelete: boolean;
+    accessAccessoryCreate: boolean;
+  };
 }
 
 // ============================================================
@@ -203,7 +208,7 @@ function EditPurchaseDialog({
 // ============================================================
 // Main Component
 // ============================================================
-export function AccessoryDetailClient({ accessory }: Props) {
+export function AccessoryDetailClient({ accessory, userAccess }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
@@ -320,48 +325,54 @@ export function AccessoryDetailClient({ accessory }: Props) {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPurchaseDialogOpen(true)}
-          >
-            <ShoppingCart className="mr-1 h-3 w-3" />
-            Tambah Stok
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEditing(!isEditing)}
-          >
-            <Pencil className="mr-1 h-3 w-3" />
-            {isEditing ? "Batal Edit" : "Edit"}
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                <Trash2 className="mr-1 h-3 w-3" />
-                Hapus
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Hapus Aksesoris?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Aksesoris &quot;{accessory.name}&quot; akan dihapus dari inventaris. Tindakan ini
-                  tidak dapat dibatalkan.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Batal</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteAccessory}
-                  disabled={isPending}
-                >
-                  {isPending ? "Menghapus..." : "Hapus"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {userAccess.accessAccessoryCreate && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPurchaseDialogOpen(true)}
+            >
+              <ShoppingCart className="mr-1 h-3 w-3" />
+              Tambah Stok
+            </Button>
+          )}
+          {userAccess.accessAccessoryUpdate && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              {isEditing ? "Batal Edit" : "Edit"}
+            </Button>
+          )}
+          {userAccess.accessAccessoryDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Hapus
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Hapus Aksesoris?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Aksesoris &quot;{accessory.name}&quot; akan dihapus dari inventaris. Tindakan ini
+                    tidak dapat dibatalkan.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAccessory}
+                    disabled={isPending}
+                  >
+                    {isPending ? "Menghapus..." : "Hapus"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -448,10 +459,12 @@ export function AccessoryDetailClient({ accessory }: Props) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Riwayat Pembelian Stok</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setPurchaseDialogOpen(true)}>
-              <Plus className="mr-1 h-3 w-3" />
-              Tambah Stok
-            </Button>
+            {userAccess.accessAccessoryCreate && (
+              <Button size="sm" variant="outline" onClick={() => setPurchaseDialogOpen(true)}>
+                <Plus className="mr-1 h-3 w-3" />
+                Tambah Stok
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -490,43 +503,47 @@ export function AccessoryDetailClient({ accessory }: Props) {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => setEditingPurchase(purchase)}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Hapus Data Pembelian?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Pembelian {purchase.quantity} unit @{formatCurrency(purchase.buyPricePerUnit)} akan dihapus.
-                                  Stok dan harga modal akan direcalculate secara otomatis.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Batal</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeletePurchase(purchase.id)}
-                                  disabled={isPending}
+                          {userAccess.accessAccessoryUpdate && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => setEditingPurchase(purchase)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {userAccess.accessAccessoryDelete && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
                                 >
-                                  Hapus
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Hapus Data Pembelian?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Pembelian {purchase.quantity} unit @{formatCurrency(purchase.buyPricePerUnit)} akan dihapus.
+                                    Stok dan harga modal akan direcalculate secara otomatis.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeletePurchase(purchase.id)}
+                                    disabled={isPending}
+                                  >
+                                    Hapus
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -9,6 +11,10 @@ import { getActiveWorkers } from "@/actions/worker";
 import { AccessorySellForm } from "./form";
 
 export default async function AccessorySellPage() {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessAccessorySell) redirect("/profile?forbidden=1");
+
   const [accessoriesResult, customersResult, workersResult] = await Promise.all([
     getAccessoriesForSale(),
     getCustomers(),

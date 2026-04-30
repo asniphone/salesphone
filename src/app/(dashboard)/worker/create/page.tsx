@@ -1,8 +1,14 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { WorkerCreateForm } from "./form";
 
-export default function WorkerCreatePage() {
+export default async function WorkerCreatePage() {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessWorkerCreate) redirect("/profile?forbidden=1");
+
   return (
     <>
       <header className="flex h-14 items-center gap-2 border-b px-4">

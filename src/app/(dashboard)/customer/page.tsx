@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCustomersPaginated } from "@/actions/customer";
+import { getCurrentUserAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -29,6 +31,10 @@ interface CustomerListPageProps {
 }
 
 export default async function CustomerListPage({ searchParams }: CustomerListPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessCustomerRead) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   const search = params.search || undefined;
@@ -73,12 +79,14 @@ export default async function CustomerListPage({ searchParams }: CustomerListPag
               <span className="font-medium">{data.total} customer</span> ditemukan.
             </p>
           </div>
-          <Button asChild>
-            <Link href="/customer/create">
-              <Plus className="mr-2 h-4 w-4" />
-              Tambah Customer
-            </Link>
-          </Button>
+          {userAccess.accessCustomerCreate && (
+            <Button asChild>
+              <Link href="/customer/create">
+                <Plus className="mr-2 h-4 w-4" />
+                Tambah Customer
+              </Link>
+            </Button>
+          )}
         </div>
 
         <div className="mb-4">

@@ -202,6 +202,7 @@ interface CreateUserInput {
   email: string;
   phone: string;
   passwordRaw: string;
+  access?: Record<string, boolean>;
 }
 
 export async function createUser(
@@ -238,6 +239,16 @@ export async function createUser(
 
     const hashedPassword = await hashPassword(input.passwordRaw);
 
+    // Build access data from input
+    const accessData: Record<string, boolean> = {};
+    if (input.access) {
+      for (const [key, value] of Object.entries(input.access)) {
+        if (key.startsWith("access") && typeof value === "boolean") {
+          accessData[key] = value;
+        }
+      }
+    }
+
     const user = await prisma.user.create({
       data: {
         name: input.name,
@@ -245,6 +256,7 @@ export async function createUser(
         phone: input.phone,
         password: hashedPassword,
         isSuperAdmin: false,
+        ...accessData,
       },
       omit: { password: true },
     });
@@ -322,6 +334,55 @@ export async function resetUserPassword(id: number): Promise<ActionResult> {
   } catch (error) {
     console.error("resetUserPassword error:", error);
     return { success: false, error: "Gagal mereset password." };
+  }
+}
+
+// ============================================================
+// UPDATE ACCESS PERMISSIONS
+// ============================================================
+
+interface UpdateUserAccessInput {
+  id: number;
+  access: Record<string, boolean>;
+}
+
+export async function updateUserAccess(
+  input: UpdateUserAccessInput,
+): Promise<ActionResult<UserWithoutPassword>> {
+  try {
+    const target = await prisma.user.findFirst({
+      where: { id: input.id, deletedAt: null },
+      select: { isSuperAdmin: true },
+    });
+
+    if (!target) {
+      return { success: false, error: "User tidak ditemukan." };
+    }
+
+    if (target.isSuperAdmin) {
+      return { success: false, error: "Tidak dapat mengubah hak akses Super Admin." };
+    }
+
+    // Build access data
+    const accessData: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(input.access)) {
+      if (key.startsWith("access") && typeof value === "boolean") {
+        accessData[key] = value;
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: input.id },
+      data: accessData,
+      omit: { password: true },
+    });
+
+    revalidateTag(CACHE_TAG.USER);
+
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error("updateUserAccess error:", error);
+    return { success: false, error: "Gagal memperbarui hak akses." };
   }
 }
 

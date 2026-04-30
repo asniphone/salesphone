@@ -15,7 +15,7 @@ model User {
   name     String
   email    String @unique
   phone    String @unique
-  password String // Hak akses ditunda, fokus ke autentikasi dasar dulu
+  password String
 
   unitLogs      UnitLog[]
   accessoryLogs AccessoryLog[]
@@ -26,6 +26,7 @@ model User {
   deletedAt            DateTime?
   sendInvoiceHistories SendInvoiceHistory[]
   cashflowLogs         CashflowLog[]
+  otps                 OTP[]
 
   // access
   isSuperAdmin               Boolean
@@ -73,7 +74,6 @@ model User {
   accessCashflowCreate       Boolean @default(false)
   accessCashflowUpdate       Boolean @default(false)
   accessCashflowDelete       Boolean @default(false)
-  otps                       OTP[]
 }
 
 model Unit {

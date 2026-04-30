@@ -61,9 +61,13 @@ interface CustomerWithUnits extends Customer {
 
 interface Props {
   customer: CustomerWithUnits;
+  userAccess: {
+    accessCustomerUpdate: boolean;
+    accessCustomerDelete: boolean;
+  };
 }
 
-export function CustomerDetailClient({ customer }: Props) {
+export function CustomerDetailClient({ customer, userAccess }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
@@ -111,37 +115,41 @@ export function CustomerDetailClient({ customer }: Props) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEditing(!isEditing)}
-          >
-            <Pencil className="mr-1 h-3 w-3" />
-            {isEditing ? "Batal Edit" : "Edit"}
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                <Trash2 className="mr-1 h-3 w-3" />
-                Hapus
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Hapus Customer?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Customer &quot;{customer.name}&quot; akan dihapus. Tindakan ini
-                  tidak dapat dibatalkan.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Batal</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} disabled={isPending}>
-                  {isPending ? "Menghapus..." : "Hapus"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {userAccess.accessCustomerUpdate && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              {isEditing ? "Batal Edit" : "Edit"}
+            </Button>
+          )}
+          {userAccess.accessCustomerDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Hapus
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Hapus Customer?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Customer &quot;{customer.name}&quot; akan dihapus. Tindakan ini
+                    tidak dapat dibatalkan.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} disabled={isPending}>
+                    {isPending ? "Menghapus..." : "Hapus"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 

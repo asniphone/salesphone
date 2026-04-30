@@ -81,6 +81,10 @@ interface Props {
     storeLogo: string | null;
     footNoteReceipt: string | null;
   };
+  userAccess: {
+    accessAccessoryUpdate: boolean;
+    accessAccessoryDelete: boolean;
+  };
 }
 
 import { AccessoryReceiptPrintButton } from "./receipt-print-button";
@@ -90,6 +94,7 @@ export function AccessoryHistorySellClient({
   customers,
   workers,
   storeInformation,
+  userAccess,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -249,22 +254,26 @@ export function AccessoryHistorySellClient({
                       <Eye className="mr-1 h-3 w-3" />
                       Detail
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEditDialog(sale)}
-                    >
-                      <Pencil className="mr-1 h-3 w-3" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setDeletingSale(sale)}
-                    >
-                      <Trash2 className="mr-1 h-3 w-3" />
-                      Hapus
-                    </Button>
+                    {userAccess.accessAccessoryUpdate && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditDialog(sale)}
+                      >
+                        <Pencil className="mr-1 h-3 w-3" />
+                        Edit
+                      </Button>
+                    )}
+                    {userAccess.accessAccessoryDelete && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeletingSale(sale)}
+                      >
+                        <Trash2 className="mr-1 h-3 w-3" />
+                        Hapus
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

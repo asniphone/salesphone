@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getWorkersPaginated } from "@/actions/worker";
@@ -23,6 +25,10 @@ interface WorkerListPageProps {
 }
 
 export default async function WorkerListPage({ searchParams }: WorkerListPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessWorkerRead) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   const search = params.search || undefined;
@@ -72,12 +78,14 @@ export default async function WorkerListPage({ searchParams }: WorkerListPagePro
               <span className="font-medium">{data.total} worker</span> ditemukan.
             </p>
           </div>
-          <Button asChild>
-            <Link href="/worker/create">
-              <Plus className="mr-2 h-4 w-4" />
-              Tambah Worker
-            </Link>
-          </Button>
+          {userAccess.accessWorkerCreate && (
+            <Button asChild>
+              <Link href="/worker/create">
+                <Plus className="mr-2 h-4 w-4" />
+                Tambah Worker
+              </Link>
+            </Button>
+          )}
         </div>
 
         <div className="mb-4">

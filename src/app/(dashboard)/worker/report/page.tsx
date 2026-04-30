@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getWorkerReport } from "@/actions/report";
@@ -15,6 +17,10 @@ interface WorkerReportPageProps {
 export default async function WorkerReportPage({
   searchParams,
 }: WorkerReportPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessWorkerReport) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
   const dateRangeFrom = params.dateRangeFrom || undefined;
   const dateRangeTo = params.dateRangeTo || undefined;

@@ -1,8 +1,14 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { UnitCreateForm } from "./form";
 
-export default function UnitCreatePage() {
+export default async function UnitCreatePage() {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessUnitCreate) redirect("/profile?forbidden=1");
+
   return (
     <>
       <header className="flex h-14 items-center gap-2 border-b px-4">

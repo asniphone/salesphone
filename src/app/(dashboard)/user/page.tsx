@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getUsersPaginated } from "@/actions/user";
+import { getCurrentUserAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -22,6 +24,10 @@ interface UserListPageProps {
 }
 
 export default async function UserListPage({ searchParams }: UserListPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessUserRead) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   const search = params.search || undefined;
@@ -64,12 +70,14 @@ export default async function UserListPage({ searchParams }: UserListPageProps) 
               <span className="font-medium">{data.total} user</span> ditemukan.
             </p>
           </div>
-          <Button asChild>
-            <Link href="/user/create">
-              <Plus className="mr-2 h-4 w-4" />
-              Tambah User
-            </Link>
-          </Button>
+          {userAccess.accessUserCreate && (
+            <Button asChild>
+              <Link href="/user/create">
+                <Plus className="mr-2 h-4 w-4" />
+                Tambah User
+              </Link>
+            </Button>
+          )}
         </div>
 
         <div className="mb-4">

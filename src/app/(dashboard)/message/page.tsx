@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getBlastMessages } from "@/actions/message";
@@ -15,6 +17,10 @@ interface MessageListPageProps {
 }
 
 export default async function MessageListPage({ searchParams }: MessageListPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessMessageHistory) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   const pageRaw = parseInt(params.page || "1", 10);
@@ -51,12 +57,14 @@ export default async function MessageListPage({ searchParams }: MessageListPageP
               Daftar seluruh pesan massal (marketing/announcement) yang telah dikirim.
             </p>
           </div>
-          <Button asChild>
-            <Link href="/message/create">
-              <Plus className="mr-2 h-4 w-4" />
-              Kirim Pesan Baru
-            </Link>
-          </Button>
+          {userAccess.accessMessageSend && (
+            <Button asChild>
+              <Link href="/message/create">
+                <Plus className="mr-2 h-4 w-4" />
+                Kirim Pesan Baru
+              </Link>
+            </Button>
+          )}
         </div>
 
         {data.total === 0 ? (

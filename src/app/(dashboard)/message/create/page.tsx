@@ -1,9 +1,15 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getCustomers } from "@/actions/customer";
 import { MessageCreateForm } from "./form";
 
 export default async function MessageCreatePage() {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessMessageSend) redirect("/profile?forbidden=1");
+
   const result = await getCustomers();
   const customers = result.data ?? [];
 

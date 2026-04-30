@@ -1,4 +1,5 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getUserById } from "@/actions/user";
@@ -11,6 +12,10 @@ interface UserDetailPageProps {
 export default async function UserDetailPage({ params }: UserDetailPageProps) {
   const resolvedParams = await params;
   const idRaw = parseInt(resolvedParams.id, 10);
+
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessUserRead) redirect("/profile?forbidden=1");
 
   if (isNaN(idRaw)) {
     notFound();
@@ -39,7 +44,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
           </p>
         </div>
 
-        <UserDetailClient user={user} />
+        <UserDetailClient user={user} userAccess={userAccess} />
       </div>
     </>
   );

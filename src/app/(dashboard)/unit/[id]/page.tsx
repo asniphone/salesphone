@@ -1,8 +1,9 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getUnitWithLogs } from "@/actions/unit";
 import { getCustomers } from "@/actions/customer";
 import { getActiveWorkers } from "@/actions/worker";
 import { getCommonInformation } from "@/actions/common-information";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { UnitDetailClient } from "./client";
@@ -15,6 +16,10 @@ interface UnitDetailPageProps {
 export default async function UnitDetailPage({ params }: UnitDetailPageProps) {
   const { id } = await params;
   const unitId = parseInt(id, 10);
+
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessUnitRead) redirect("/profile?forbidden=1");
 
   if (isNaN(unitId)) {
     notFound();
@@ -89,6 +94,7 @@ export default async function UnitDetailPage({ params }: UnitDetailPageProps) {
           customers={customerResult.data ?? []}
           workers={workerResult.data ?? []}
           unitFeePercentage={storeInformation.unitFeePercentage}
+          userAccess={userAccess}
         />
       </div>
     </>

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getDashboardSummary } from "@/actions/report";
+import { getCurrentUserAccess } from "@/lib/access";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +18,10 @@ import {
 } from "lucide-react";
 
 export default async function DashboardPage() {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessDashboardGeneralRead) redirect("/profile?forbidden=1");
+
   const summaryResult = await getDashboardSummary();
   const data = summaryResult.data ?? {
     unit: { available: 0, soldThisMonth: 0, pendapatanThisMonth: 0, keuntunganThisMonth: 0 },

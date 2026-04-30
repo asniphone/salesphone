@@ -1,4 +1,5 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { getCustomerWithUnits } from "@/actions/customer";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -13,6 +14,10 @@ export default async function CustomerDetailPage({
 }: CustomerDetailPageProps) {
   const { id } = await params;
   const customerId = parseInt(id, 10);
+
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessCustomerRead) redirect("/profile?forbidden=1");
 
   if (isNaN(customerId)) {
     notFound();
@@ -33,7 +38,7 @@ export default async function CustomerDetailPage({
       </header>
 
       <div className="p-4 md:p-6">
-        <CustomerDetailClient customer={result.data} />
+        <CustomerDetailClient customer={result.data} userAccess={userAccess} />
       </div>
     </>
   );

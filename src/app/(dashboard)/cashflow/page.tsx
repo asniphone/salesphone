@@ -1,5 +1,7 @@
 import type { CashflowType } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { getCashflows } from "@/actions/cashflow";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { CashflowFilter, CashflowPagination } from "./filter";
@@ -24,6 +26,10 @@ interface CashflowPageProps {
 }
 
 export default async function CashflowPage({ searchParams }: CashflowPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessCashflowRead) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   const search = params.search || undefined;
@@ -100,7 +106,7 @@ export default async function CashflowPage({ searchParams }: CashflowPageProps) 
           />
         </div>
 
-        <CashflowListClient cashflows={data.cashflows} summary={data.summary} />
+        <CashflowListClient cashflows={data.cashflows} summary={data.summary} userAccess={userAccess} />
 
         {data.cashflows.length > 0 && (
           <CashflowPagination

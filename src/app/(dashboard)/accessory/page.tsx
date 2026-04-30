@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getAccessories } from "@/actions/accessory";
+import { getCurrentUserAccess } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -41,6 +43,10 @@ interface AccessoryListPageProps {
 }
 
 export default async function AccessoryListPage({ searchParams }: AccessoryListPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessAccessoryRead) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   const search = params.search || undefined;
@@ -94,18 +100,22 @@ export default async function AccessoryListPage({ searchParams }: AccessoryListP
             </p>
           </div>
           <div className="flex gap-2">
-            <Button asChild variant="outline">
-              <Link href="/accessory/sell">
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Jual
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href="/accessory/create">
-                <Plus className="mr-2 h-4 w-4" />
-                Tambah Aksesoris
-              </Link>
-            </Button>
+            {userAccess.accessAccessorySell && (
+              <Button asChild variant="outline">
+                <Link href="/accessory/sell">
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Jual
+                </Link>
+              </Button>
+            )}
+            {userAccess.accessAccessoryCreate && (
+              <Button asChild>
+                <Link href="/accessory/create">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Tambah Aksesoris
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 

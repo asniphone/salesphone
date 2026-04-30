@@ -83,6 +83,11 @@ interface CashflowSummary {
 interface CashflowListClientProps {
   cashflows: CashflowListItem[];
   summary: CashflowSummary;
+  userAccess: {
+    accessCashflowCreate: boolean;
+    accessCashflowUpdate: boolean;
+    accessCashflowDelete: boolean;
+  };
 }
 
 interface CashflowFormState {
@@ -165,6 +170,7 @@ function mapCashflowToFormValue(cashflow: CashflowListItem): CashflowFormState {
 export function CashflowListClient({
   cashflows,
   summary,
+  userAccess,
 }: CashflowListClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -284,13 +290,14 @@ export function CashflowListClient({
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Tambah Cashflow
-            </Button>
-          </DialogTrigger>
+        {userAccess.accessCashflowCreate && (
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Tambah Cashflow
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Tambah Cashflow</DialogTitle>
@@ -319,8 +326,8 @@ export function CashflowListClient({
             />
           </DialogContent>
         </Dialog>
+        )}
       </div>
-
       {cashflows.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center">
           <ReceiptText className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
@@ -397,75 +404,79 @@ export function CashflowListClient({
                           Detail
                         </Button>
 
-                        <Dialog
-                          open={editingCashflow?.id === cashflow.id}
-                          onOpenChange={(open) =>
-                            setEditingCashflow(open ? cashflow : null)
-                          }
-                        >
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditingCashflow(cashflow)}
-                            >
-                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                              Edit
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Edit Cashflow</DialogTitle>
-                              <DialogDescription>
-                                Perbarui transaksi cashflow tanpa meninggalkan halaman ini.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <CashflowForm
-                              mode="edit"
-                              initialValue={mapCashflowToFormValue(cashflow)}
-                              isPending={isPending}
-                              onCancel={() => setEditingCashflow(null)}
-                              onSubmit={(value) => {
-                                startTransition(async () => {
-                                  const result = await updateCashflow(cashflow.id, value);
+                        {userAccess.accessCashflowUpdate && (
+                          <Dialog
+                            open={editingCashflow?.id === cashflow.id}
+                            onOpenChange={(open) =>
+                              setEditingCashflow(open ? cashflow : null)
+                            }
+                          >
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingCashflow(cashflow)}
+                              >
+                                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                Edit
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>Edit Cashflow</DialogTitle>
+                                <DialogDescription>
+                                  Perbarui transaksi cashflow tanpa meninggalkan halaman ini.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <CashflowForm
+                                mode="edit"
+                                initialValue={mapCashflowToFormValue(cashflow)}
+                                isPending={isPending}
+                                onCancel={() => setEditingCashflow(null)}
+                                onSubmit={(value) => {
+                                  startTransition(async () => {
+                                    const result = await updateCashflow(cashflow.id, value);
 
-                                  if (result.success) {
-                                    toast.success("Transaksi cashflow berhasil diperbarui.");
-                                    setEditingCashflow(null);
-                                    router.refresh();
-                                    return;
-                                  }
+                                    if (result.success) {
+                                      toast.success("Transaksi cashflow berhasil diperbarui.");
+                                      setEditingCashflow(null);
+                                      router.refresh();
+                                      return;
+                                    }
 
-                                  toast.error(result.error ?? "Gagal memperbarui cashflow.");
-                                });
-                              }}
-                            />
-                          </DialogContent>
-                        </Dialog>
+                                    toast.error(result.error ?? "Gagal memperbarui cashflow.");
+                                  });
+                                }}
+                              />
+                            </DialogContent>
+                          </Dialog>
+                        )}
 
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm">
-                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                              Hapus
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Hapus transaksi cashflow?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Data cashflow akan disembunyikan dari daftar aktif. Tindakan ini
-                                tidak dapat dibatalkan dari UI saat ini.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Batal</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(cashflow.id)}>
-                                {isPending ? "Menghapus..." : "Hapus"}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {userAccess.accessCashflowDelete && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                Hapus
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus transaksi cashflow?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Data cashflow akan disembunyikan dari daftar aktif. Tindakan ini
+                                  tidak dapat dibatalkan dari UI saat ini.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(cashflow.id)}>
+                                  {isPending ? "Menghapus..." : "Hapus"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

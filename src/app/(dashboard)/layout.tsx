@@ -1,5 +1,5 @@
-import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { DashboardSidebar } from "./sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,17 +9,18 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getSession();
-  if (!session) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) {
     redirect("/login");
   }
 
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <DashboardSidebar email={session.email} />
+        <DashboardSidebar userAccess={userAccess} />
         <SidebarInset>{children}</SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
   );
 }
+

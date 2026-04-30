@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { getAccessorySales } from "@/actions/accessory";
 import { getCustomers } from "@/actions/customer";
 import { getWorkers } from "@/actions/worker";
 import { getCommonInformation } from "@/actions/common-information";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Package } from "lucide-react";
@@ -19,6 +21,10 @@ interface AccessoryHistorySellPageProps {
 }
 
 export default async function AccessoryHistorySellPage({ searchParams }: AccessoryHistorySellPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessAccessoryHistory) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   const search = params.search || undefined;
@@ -112,6 +118,7 @@ export default async function AccessoryHistorySellPage({ searchParams }: Accesso
                 storeLogo: storeInformation.storeLogo,
                 footNoteReceipt: storeInformation.footNoteReceipt,
               }}
+              userAccess={userAccess}
             />
 
             {/* Pagination */}

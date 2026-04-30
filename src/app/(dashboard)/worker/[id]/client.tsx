@@ -43,9 +43,13 @@ function formatCurrency(value: number | null | undefined): string {
 
 interface Props {
   worker: WorkerWithUnits;
+  userAccess: {
+    accessWorkerUpdate: boolean;
+    accessWorkerDelete: boolean;
+  };
 }
 
-export function WorkerDetailClient({ worker }: Props) {
+export function WorkerDetailClient({ worker, userAccess }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorProfile, setErrorProfile] = useState<string | null>(null);
@@ -114,120 +118,126 @@ export function WorkerDetailClient({ worker }: Props) {
       {/* Kolom Kiri: Info & Actions */}
       <div className="space-y-6">
         {/* Edit Card */}
-        <Card>
-          <form action={onUpdateProfile}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <HardHat className="w-5 h-5 text-muted-foreground" />
-                Edit Profil
-              </CardTitle>
-              <CardDescription>
-                Update identitas worker.
-                {worker.isActive ? (
-                  <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">Aktif</Badge>
-                ) : (
-                  <Badge variant="outline" className="ml-2 text-muted-foreground">Nonaktif</Badge>
+        {userAccess.accessWorkerUpdate && (
+          <Card>
+            <form action={onUpdateProfile}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <HardHat className="w-5 h-5 text-muted-foreground" />
+                  Edit Profil
+                </CardTitle>
+                <CardDescription>
+                  Update identitas worker.
+                  {worker.isActive ? (
+                    <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">Aktif</Badge>
+                  ) : (
+                    <Badge variant="outline" className="ml-2 text-muted-foreground">Nonaktif</Badge>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {errorProfile && (
+                  <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {errorProfile}
+                  </div>
                 )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {errorProfile && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {errorProfile}
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nama Lengkap</Label>
+                  <Input id="name" name="name" defaultValue={worker.name} disabled={isPending} />
                 </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="name">Nama Lengkap</Label>
-                <Input id="name" name="name" defaultValue={worker.name} disabled={isPending} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Nomor Telepon</Label>
-                <Input id="phone" name="phone" defaultValue={worker.phone} disabled={isPending} />
-              </div>
-            </CardContent>
-            <CardFooter className="bg-muted/50 py-3 flex justify-end">
-              <Button type="submit" disabled={isPending} size="sm">
-                {isPending ? "Menyimpan..." : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" /> Simpan
-                  </>
-                )}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Nomor Telepon</Label>
+                  <Input id="phone" name="phone" defaultValue={worker.phone} disabled={isPending} />
+                </div>
+              </CardContent>
+              <CardFooter className="bg-muted/50 py-3 flex justify-end">
+                <Button type="submit" disabled={isPending} size="sm">
+                  {isPending ? "Menyimpan..." : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" /> Simpan
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            </form>
+          </Card>
+        )}
 
         {/* Toggle Active Card */}
-        <Card className="border-yellow-200 dark:border-yellow-900/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Power className="w-4 h-4 text-yellow-600" />
-              {worker.isActive ? "Nonaktifkan Worker" : "Aktifkan Worker"}
-            </CardTitle>
-            <CardDescription className="text-xs">
-              {worker.isActive
-                ? "Worker yang dinonaktifkan tidak akan muncul sebagai opsi saat menjual unit."
-                : "Aktifkan kembali agar worker dapat dipilih saat penjualan unit."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="w-full" disabled={isPending}>
-                  {worker.isActive ? "Nonaktifkan" : "Aktifkan Kembali"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{worker.isActive ? "Nonaktifkan" : "Aktifkan"} Worker?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Worker <b>{worker.name}</b> akan {worker.isActive ? "dinonaktifkan" : "diaktifkan kembali"}.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Batal</AlertDialogCancel>
-                  <AlertDialogAction onClick={onToggleActive}>Lanjutkan</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardContent>
-        </Card>
+        {userAccess.accessWorkerUpdate && (
+          <Card className="border-yellow-200 dark:border-yellow-900/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Power className="w-4 h-4 text-yellow-600" />
+                {worker.isActive ? "Nonaktifkan Worker" : "Aktifkan Worker"}
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {worker.isActive
+                  ? "Worker yang dinonaktifkan tidak akan muncul sebagai opsi saat menjual unit."
+                  : "Aktifkan kembali agar worker dapat dipilih saat penjualan unit."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="w-full" disabled={isPending}>
+                    {worker.isActive ? "Nonaktifkan" : "Aktifkan Kembali"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{worker.isActive ? "Nonaktifkan" : "Aktifkan"} Worker?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Worker <b>{worker.name}</b> akan {worker.isActive ? "dinonaktifkan" : "diaktifkan kembali"}.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                    <AlertDialogAction onClick={onToggleActive}>Lanjutkan</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Delete Card */}
-        <Card className="border-red-200 dark:border-red-900/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2 text-destructive">
-              <Trash2 className="w-4 h-4" />
-              Hapus Worker
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Menghapus worker dari sistem secara permanen.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full" disabled={isPending}>
-                  Hapus Worker
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Anda yakin ingin menghapus worker?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Worker <b>{worker.name}</b> akan dihapus dari sistem. Data unit yang sudah terjual olehnya akan tetap tercatat.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Batal</AlertDialogCancel>
-                  <AlertDialogAction onClick={onDeleteWorker} className="bg-destructive text-destructive-foreground">
-                    Ya, Hapus
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardContent>
-        </Card>
+        {userAccess.accessWorkerDelete && (
+          <Card className="border-red-200 dark:border-red-900/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2 text-destructive">
+                <Trash2 className="w-4 h-4" />
+                Hapus Worker
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Menghapus worker dari sistem secara permanen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full" disabled={isPending}>
+                    Hapus Worker
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Anda yakin ingin menghapus worker?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Worker <b>{worker.name}</b> akan dihapus dari sistem. Data unit yang sudah terjual olehnya akan tetap tercatat.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                    <AlertDialogAction onClick={onDeleteWorker} className="bg-destructive text-destructive-foreground">
+                      Ya, Hapus
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Kolom Kanan: Report & History */}

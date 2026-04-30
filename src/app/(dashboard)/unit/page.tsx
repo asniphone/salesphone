@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getUnits } from "@/actions/unit";
+import { getCurrentUserAccess } from "@/lib/access";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +57,10 @@ interface UnitListPageProps {
 }
 
 export default async function UnitListPage({ searchParams }: UnitListPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessUnitRead) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
 
   // Parse & validate search params
@@ -107,12 +113,14 @@ export default async function UnitListPage({ searchParams }: UnitListPageProps) 
               <span className="font-medium">{data.total} unit</span> ditemukan.
             </p>
           </div>
-          <Button asChild>
-            <Link href="/unit/create">
-              <Plus className="mr-2 h-4 w-4" />
-              Tambah Unit
-            </Link>
-          </Button>
+          {userAccess.accessUnitCreate && (
+            <Button asChild>
+              <Link href="/unit/create">
+                <Plus className="mr-2 h-4 w-4" />
+                Tambah Unit
+              </Link>
+            </Button>
+          )}
         </div>
 
         {/* Filter */}

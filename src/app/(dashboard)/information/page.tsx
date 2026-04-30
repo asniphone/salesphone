@@ -1,9 +1,15 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getCommonInformation } from "@/actions/common-information";
 import { CommonInformationClient } from "./client";
 
 export default async function InformationPage() {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessInformationRead) redirect("/profile?forbidden=1");
+
   const result = await getCommonInformation();
 
   const information = result.data ?? {

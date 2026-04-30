@@ -34,82 +34,88 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { logout } from "@/actions/auth";
+import type { UserAccess } from "@/lib/access";
+
+type SubMenuItem = { title: string; url: string };
 
 type MenuItem = {
   title: string;
   icon: LucideIcon;
   url?: string;
-  items?: { title: string; url: string }[];
+  items?: SubMenuItem[];
 };
 
-const menuItems: MenuItem[] = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Unit",
-    icon: Smartphone,
-    items: [
-      { title: "Daftar Unit", url: "/unit" },
-      { title: "Laporan", url: "/unit/report" },
-    ],
-  },
-  {
-    title: "Aksesoris",
-    icon: Package,
-    items: [
-      { title: "Daftar Aksesoris", url: "/accessory" },
-      { title: "Jual Aksesoris", url: "/accessory/sell" },
-      { title: "Riwayat Penjualan", url: "/accessory/history-sell" },
-      { title: "Laporan", url: "/accessory/report" },
-    ],
-  },
-  {
-    title: "Pesan",
-    icon: MessageSquare,
-    items: [
-      { title: "Riwayat Pesan", url: "/message" },
-      { title: "Kirim Pesan", url: "/message/create" },
-    ],
-  },
-  {
-    title: "Customer",
-    url: "/customer",
-    icon: Users,
-  },
-  {
-    title: "User",
-    url: "/user",
-    icon: UserCircle,
-  },
-  {
-    title: "Worker",
-    icon: HardHat,
-    items: [
-      { title: "Daftar Worker", url: "/worker" },
-      { title: "Laporan", url: "/worker/report" },
-    ],
-  },
-  {
-    title: "Informasi",
-    url: "/information",
-    icon: Store,
-  },
-  {
-    title: "Arus Kas Operasional",
-    url: "/cashflow",
-    icon: Wallet,
-  },
-];
-
 interface DashboardSidebarProps {
-  email: string;
+  userAccess: UserAccess;
 }
 
-export function DashboardSidebar({ email }: DashboardSidebarProps) {
+export function DashboardSidebar({ userAccess }: DashboardSidebarProps) {
   const pathname = usePathname();
+
+  // Build menu items based on access
+  const menuItems: MenuItem[] = [];
+
+  if (userAccess.accessDashboardGeneralRead) {
+    menuItems.push({
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: LayoutDashboard,
+    });
+  }
+
+  // Unit group
+  const unitSubItems: SubMenuItem[] = [];
+  if (userAccess.accessUnitRead) unitSubItems.push({ title: "Daftar Unit", url: "/unit" });
+  if (userAccess.accessUnitReport) unitSubItems.push({ title: "Laporan", url: "/unit/report" });
+  if (unitSubItems.length > 0) {
+    menuItems.push({ title: "Unit", icon: Smartphone, items: unitSubItems });
+  }
+
+  // Accessory group
+  const accSubItems: SubMenuItem[] = [];
+  if (userAccess.accessAccessoryRead) accSubItems.push({ title: "Daftar Aksesoris", url: "/accessory" });
+  if (userAccess.accessAccessorySell) accSubItems.push({ title: "Jual Aksesoris", url: "/accessory/sell" });
+  if (userAccess.accessAccessoryHistory) accSubItems.push({ title: "Riwayat Penjualan", url: "/accessory/history-sell" });
+  if (userAccess.accessAccessoryReport) accSubItems.push({ title: "Laporan", url: "/accessory/report" });
+  if (accSubItems.length > 0) {
+    menuItems.push({ title: "Aksesoris", icon: Package, items: accSubItems });
+  }
+
+  // Message group
+  const msgSubItems: SubMenuItem[] = [];
+  if (userAccess.accessMessageHistory) msgSubItems.push({ title: "Riwayat Pesan", url: "/message" });
+  if (userAccess.accessMessageSend) msgSubItems.push({ title: "Kirim Pesan", url: "/message/create" });
+  if (msgSubItems.length > 0) {
+    menuItems.push({ title: "Pesan", icon: MessageSquare, items: msgSubItems });
+  }
+
+  // Customer
+  if (userAccess.accessCustomerRead) {
+    menuItems.push({ title: "Customer", url: "/customer", icon: Users });
+  }
+
+  // User
+  if (userAccess.accessUserRead) {
+    menuItems.push({ title: "User", url: "/user", icon: UserCircle });
+  }
+
+  // Worker group
+  const workerSubItems: SubMenuItem[] = [];
+  if (userAccess.accessWorkerRead) workerSubItems.push({ title: "Daftar Worker", url: "/worker" });
+  if (userAccess.accessWorkerReport) workerSubItems.push({ title: "Laporan", url: "/worker/report" });
+  if (workerSubItems.length > 0) {
+    menuItems.push({ title: "Worker", icon: HardHat, items: workerSubItems });
+  }
+
+  // Information
+  if (userAccess.accessInformationRead) {
+    menuItems.push({ title: "Informasi", url: "/information", icon: Store });
+  }
+
+  // Cashflow
+  if (userAccess.accessCashflowRead) {
+    menuItems.push({ title: "Arus Kas Operasional", url: "/cashflow", icon: Wallet });
+  }
 
   return (
     <Sidebar>
@@ -194,7 +200,7 @@ export function DashboardSidebar({ email }: DashboardSidebarProps) {
 
       <SidebarFooter>
         <div className="px-2 py-1">
-          <p className="truncate text-xs text-muted-foreground">{email}</p>
+          <p className="truncate text-xs text-muted-foreground">{userAccess.email}</p>
         </div>
         <SidebarMenu>
           <SidebarMenuItem>

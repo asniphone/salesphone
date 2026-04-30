@@ -1,4 +1,5 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { getAccessoryById } from "@/actions/accessory";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -14,6 +15,10 @@ interface AccessoryDetailPageProps {
 export default async function AccessoryDetailPage({ params }: AccessoryDetailPageProps) {
   const { id } = await params;
   const accessoryId = parseInt(id, 10);
+
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessAccessoryRead) redirect("/profile?forbidden=1");
 
   if (isNaN(accessoryId)) {
     notFound();
@@ -43,7 +48,7 @@ export default async function AccessoryDetailPage({ params }: AccessoryDetailPag
       </header>
 
       <div className="p-4 md:p-6 max-w-3xl">
-        <AccessoryDetailClient accessory={accessory} />
+        <AccessoryDetailClient accessory={accessory} userAccess={userAccess} />
       </div>
     </>
   );

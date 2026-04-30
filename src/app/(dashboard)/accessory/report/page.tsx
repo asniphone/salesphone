@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getAccessoryReport } from "@/actions/report";
@@ -12,6 +14,10 @@ interface AccessoryReportPageProps {
 }
 
 export default async function AccessoryReportPage({ searchParams }: AccessoryReportPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessAccessoryReport) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
   const dateRangeFrom = params.dateRangeFrom || undefined;
   const dateRangeTo = params.dateRangeTo || undefined;

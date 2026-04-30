@@ -1,6 +1,7 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useTransition, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { updateProfile, updatePassword } from "@/actions/profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,15 @@ interface ProfileFormProps {
 }
 
 export function ProfileForm({ initialData }: ProfileFormProps) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("forbidden") === "1") {
+      toast.error("Anda tidak memiliki akses ke halaman tersebut.");
+      // Clean up the URL param without re-render
+      window.history.replaceState({}, "", "/profile");
+    }
+  }, [searchParams]);
   const [isPendingProfile, startTransitionProfile] = useTransition();
   const [isPendingPassword, startTransitionPassword] = useTransition();
 

@@ -54,6 +54,7 @@ import { Pencil, Trash2, Plus, MessageSquare } from "lucide-react";
 import type { Status, Customer, PaymentType } from "@prisma/client";
 import type { WorkerData } from "@/actions/worker";
 import { UNIT_PAYMENT_TYPE_CONFIG, UNIT_STATUS_CONFIG } from "@/constants/unit";
+import type { UserAccess } from "@/lib/access";
 
 interface UnitLog {
   id: number;
@@ -132,6 +133,7 @@ interface Props {
   customers: Customer[];
   workers: WorkerData[];
   unitFeePercentage: number;
+  userAccess: UserAccess;
 }
 
 export function UnitDetailClient({
@@ -139,6 +141,7 @@ export function UnitDetailClient({
   customers: initialCustomers,
   workers,
   unitFeePercentage,
+  userAccess,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -363,7 +366,7 @@ export function UnitDetailClient({
           </div>
         </div>
         <div className="flex gap-2">
-          {unit.status === "SOLD" && unit.customerId && (
+          {unit.status === "SOLD" && unit.customerId && userAccess.accessUnitUpdate && (
             <Button
               variant="default"
               size="sm"
@@ -374,37 +377,41 @@ export function UnitDetailClient({
               {isSendingInvoice ? "Mengirim..." : "Kirim Invoice WA"}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEditing(!isEditing)}
-          >
-            <Pencil className="mr-1 h-3 w-3" />
-            {isEditing ? "Batal Edit" : "Edit"}
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                <Trash2 className="mr-1 h-3 w-3" />
-                Hapus
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Hapus Unit?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Unit &quot;{unit.name}&quot; akan dihapus. Tindakan ini tidak
-                  dapat dibatalkan.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Batal</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} disabled={isPending}>
-                  {isPending ? "Menghapus..." : "Hapus"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {userAccess.accessUnitUpdate && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              <Pencil className="mr-1 h-3 w-3" />
+              {isEditing ? "Batal Edit" : "Edit"}
+            </Button>
+          )}
+          {userAccess.accessUnitDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Hapus
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Hapus Unit?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Unit &quot;{unit.name}&quot; akan dihapus. Tindakan ini tidak
+                    dapat dibatalkan.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} disabled={isPending}>
+                    {isPending ? "Menghapus..." : "Hapus"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 

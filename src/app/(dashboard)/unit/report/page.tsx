@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { getCurrentUserAccess } from "@/lib/access";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { getUnitReport } from "@/actions/report";
@@ -12,6 +14,10 @@ interface UnitReportPageProps {
 }
 
 export default async function UnitReportPage({ searchParams }: UnitReportPageProps) {
+  const userAccess = await getCurrentUserAccess();
+  if (!userAccess) redirect("/login");
+  if (!userAccess.accessUnitReport) redirect("/profile?forbidden=1");
+
   const params = await searchParams;
   const dateRangeFrom = params.dateRangeFrom || undefined;
   const dateRangeTo = params.dateRangeTo || undefined;
