@@ -121,12 +121,12 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md w-[95vw] max-w-md mx-auto max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Scan Barcode / QR Code</DialogTitle>
         </DialogHeader>
         
-        <div className="flex flex-col items-center justify-center space-y-4">
+        <div className="flex flex-col items-center justify-center space-y-4 w-full">
           {error ? (
             <div className="text-center p-4 bg-destructive/10 text-destructive rounded-md w-full">
               <p>{error}</p>
@@ -141,7 +141,7 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
           ) : (
             <>
               {cameras.length > 1 && (
-                <div className="flex gap-2 w-full overflow-x-auto pb-2">
+                <div className="flex gap-2 w-full overflow-x-auto pb-2 scrollbar-hide">
                   {cameras.map(camera => (
                     <Button
                       key={camera.id}
@@ -156,14 +156,14 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
                 </div>
               )}
               
-              <div className="relative w-full max-w-sm min-h-[300px] flex items-center justify-center bg-black/5 rounded-lg overflow-hidden">
+              <div className="relative w-full max-w-sm aspect-square md:min-h-[300px] flex items-center justify-center bg-black/5 rounded-lg overflow-hidden [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&_#qr-shaded-region]:!border-none">
                 {!isScanning && !error && (
                   <div className="flex flex-col items-center text-muted-foreground absolute z-10 pointer-events-none">
                     <Loader2 className="h-8 w-8 animate-spin mb-2" />
                     <span>Mempersiapkan kamera...</span>
                   </div>
                 )}
-                <div id={regionId} className="w-full h-full absolute inset-0" />
+                <div id={regionId} className="w-full h-full absolute inset-0 flex items-center justify-center" />
               </div>
               
               <p className="text-sm text-muted-foreground text-center">
