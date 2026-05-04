@@ -17,7 +17,7 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
   const [activeCameraId, setActiveCameraId] = useState<string>("");
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const regionId = "camera-scanner-region";
 
@@ -25,20 +25,20 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
   useEffect(() => {
     if (open) {
       setError(null);
-      
+
       // Initialize the scanner
       Html5Qrcode.getCameras()
         .then((devices) => {
           if (devices && devices.length) {
             setCameras(devices);
-            
+
             // Prefer back camera if available
-            const backCamera = devices.find(d => 
-              d.label.toLowerCase().includes("back") || 
+            const backCamera = devices.find(d =>
+              d.label.toLowerCase().includes("back") ||
               d.label.toLowerCase().includes("environment") ||
               d.label.toLowerCase().includes("belakang")
             );
-            
+
             const selectedCameraId = backCamera ? backCamera.id : devices[0].id;
             setActiveCameraId(selectedCameraId);
             startScanner(selectedCameraId);
@@ -57,7 +57,7 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
     return () => {
       stopScanner();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const startScanner = (cameraId: string) => {
@@ -70,7 +70,7 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
       try {
         const html5QrCode = new Html5Qrcode(regionId);
         scannerRef.current = html5QrCode;
-        
+
         setIsScanning(true);
         html5QrCode.start(
           cameraId,
@@ -121,17 +121,17 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md w-[95vw] max-w-md mx-auto max-h-[90vh] overflow-y-auto">
+      <DialogContent className=" mx-auto max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Scan Barcode / QR Code</DialogTitle>
         </DialogHeader>
-        
-        <div className="flex flex-col items-center justify-center space-y-4 w-full">
+
+        <div className="flex flex-col items-center justify-center space-y-4 w-full overflow-x-auto">
           {error ? (
             <div className="text-center p-4 bg-destructive/10 text-destructive rounded-md w-full">
               <p>{error}</p>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="mt-4"
                 onClick={() => onOpenChange(false)}
               >
@@ -155,7 +155,7 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
                   ))}
                 </div>
               )}
-              
+
               <div className="relative w-full max-w-sm aspect-square md:min-h-[300px] flex items-center justify-center bg-black/5 rounded-lg overflow-hidden [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&_#qr-shaded-region]:!border-none">
                 {!isScanning && !error && (
                   <div className="flex flex-col items-center text-muted-foreground absolute z-10 pointer-events-none">
@@ -165,7 +165,7 @@ export function CameraScanner({ open, onOpenChange, onScan }: CameraScannerProps
                 )}
                 <div id={regionId} className="w-full h-full absolute inset-0 flex items-center justify-center" />
               </div>
-              
+
               <p className="text-sm text-muted-foreground text-center">
                 Arahkan barcode / QR code ke dalam area kotak.
               </p>
