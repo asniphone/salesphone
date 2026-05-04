@@ -208,6 +208,7 @@ model Accessory {
   purchases AccessoryPurchase[]
   sales     AccessorySaleItem[]
   logs      AccessoryLog[]
+  units     AccessoryUnit[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -228,6 +229,7 @@ model AccessoryPurchase {
   note String? @db.Text()
 
   accessoryLogs AccessoryLog[] // Relasi balik dari Log
+  units         AccessoryUnit[] // Unit fisik dari purchase ini
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -277,6 +279,7 @@ model AccessorySaleItem {
 
   // Log tetap menempel ke detail item agar tahu barang mana yang berubah
   accessoryLogs AccessoryLog[]
+  units         AccessoryUnit[] // Unit fisik yang terjual di item ini
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -328,6 +331,38 @@ enum AccessoryKindLogType {
   COMMON // Perubahan nama/harga jual secara manual
   PURCHASE // Penambahan stok & recalculate MAC
   SALE // Pengurangan stok
+}
+
+// Unit fisik per aksesoris — setiap unit bisa punya serial number
+model AccessoryUnit {
+  id Int @id @default(autoincrement())
+
+  accessoryId Int
+  accessory   Accessory @relation(fields: [accessoryId], references: [id], onDelete: Cascade)
+
+  serialNumber String? // Opsional — boleh null jika tanpa SN
+  buyPrice     Int // Harga beli unit ini (diambil dari purchase.buyPricePerUnit)
+
+  status AccessoryUnitStatus @default(AVAILABLE)
+
+  // Dari purchase mana unit ini masuk
+  purchaseId Int
+  purchase   AccessoryPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  // Jika sudah terjual, link ke sale item
+  saleItemId Int?
+  saleItem   AccessorySaleItem? @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
+
+  note String? @db.Text()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+enum AccessoryUnitStatus {
+  AVAILABLE
+  SOLD
 }
 
 // Blast Message History

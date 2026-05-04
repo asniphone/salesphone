@@ -45,12 +45,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
-import { Pencil, Trash2, Plus, ShoppingCart } from "lucide-react";
+import { Pencil, Trash2, Plus, ShoppingCart, Package } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 
 type AccessoryData = Prisma.AccessoryGetPayload<{
   include: {
-    purchases: { where: { deletedAt: null } };
+    purchases: { where: { deletedAt: null }; include: { units: { where: { deletedAt: null } } } };
+    units: { where: { deletedAt: null } };
     logs: {
       include: {
         user: { omit: { password: true } };
@@ -225,6 +226,7 @@ export function AccessoryDetailClient({ accessory, userAccess }: Props) {
   const [purchaseQty, setPurchaseQty] = useState("");
   const [purchaseBuyPrice, setPurchaseBuyPrice] = useState("");
   const [purchaseNote, setPurchaseNote] = useState("");
+  const [purchaseSerialNumbers, setPurchaseSerialNumbers] = useState<string[]>([]);
 
   function handleSaveEdit() {
     if (!name.trim()) {
@@ -277,6 +279,7 @@ export function AccessoryDetailClient({ accessory, userAccess }: Props) {
         quantity: qty,
         buyPricePerUnit: price,
         note: purchaseNote || undefined,
+        serialNumbers: purchaseSerialNumbers.map((sn) => sn.trim() || null),
       });
       if (result.success) {
         toast.success(`Berhasil menambah ${qty} unit stok.`);
@@ -284,6 +287,7 @@ export function AccessoryDetailClient({ accessory, userAccess }: Props) {
         setPurchaseQty("");
         setPurchaseBuyPrice("");
         setPurchaseNote("");
+        setPurchaseSerialNumbers([]);
         router.refresh();
       } else {
         toast.error(result.error ?? "Gagal menambah stok.");
@@ -449,6 +453,64 @@ export function AccessoryDetailClient({ accessory, userAccess }: Props) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      {/* Daftar Unit */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Daftar Unit ({accessory.units?.length ?? 0})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(!accessory.units || accessory.units.length === 0) ? (
+            <p className="text-sm text-muted-foreground">Belum ada unit terdaftar.</p>
+          ) : (
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>#</TableHead>
+                    <TableHead>Serial Number</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Harga Beli</TableHead>
+                    <TableHead>Tanggal Masuk</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {accessory.units.map((unit, idx) => (
+                    <TableRow key={unit.id}>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {idx + 1}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {unit.serialNumber ?? <span className="text-muted-foreground italic">Tanpa SN</span>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={unit.status === "AVAILABLE" ? "secondary" : "outline"}
+                          className={`text-xs ${
+                            unit.status === "AVAILABLE"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {unit.status === "AVAILABLE" ? "Tersedia" : "Terjual"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {formatCurrency(unit.buyPrice)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDateTime(unit.createdAt)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -621,7 +683,7 @@ export function AccessoryDetailClient({ accessory, userAccess }: Props) {
 
       {/* Dialog Tambah Stok */}
       <Dialog open={purchaseDialogOpen} onOpenChange={setPurchaseDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Tambah Stok Aksesoris</DialogTitle>
           </DialogHeader>
@@ -637,7 +699,18 @@ export function AccessoryDetailClient({ accessory, userAccess }: Props) {
                 <Input
                   type="number"
                   value={purchaseQty}
-                  onChange={(e) => setPurchaseQty(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPurchaseQty(val);
+                    const num = parseInt(val, 10) || 0;
+                    setPurchaseSerialNumbers((prev) => {
+                      const arr = [...prev];
+                      if (num > arr.length) {
+                        return [...arr, ...Array(num - arr.length).fill("")];
+                      }
+                      return arr.slice(0, num);
+                    });
+                  }}
                   placeholder="Contoh: 10"
                   min={1}
                 />
@@ -653,6 +726,36 @@ export function AccessoryDetailClient({ accessory, userAccess }: Props) {
                 />
               </div>
             </div>
+
+            {/* Serial Number inputs */}
+            {purchaseSerialNumbers.length > 0 && (
+              <div className="space-y-2">
+                <Label>Serial Number (opsional per unit)</Label>
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                  {purchaseSerialNumbers.map((sn, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-8 shrink-0 text-right">
+                        #{idx + 1}
+                      </span>
+                      <Input
+                        value={sn}
+                        onChange={(e) => {
+                          const updated = [...purchaseSerialNumbers];
+                          updated[idx] = e.target.value;
+                          setPurchaseSerialNumbers(updated);
+                        }}
+                        placeholder="Kosongkan jika tanpa SN"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Kosongkan field jika unit tidak memiliki serial number.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Catatan</Label>
               <Textarea

@@ -24,7 +24,8 @@ type AccessoryWithCounts = Prisma.AccessoryGetPayload<{
 
 type AccessoryWithDetails = Prisma.AccessoryGetPayload<{
   include: {
-    purchases: { where: { deletedAt: null } };
+    purchases: { where: { deletedAt: null }; include: { units: { where: { deletedAt: null } } } };
+    units: { where: { deletedAt: null } };
     logs: {
       include: {
         user: { omit: { password: true } };
@@ -45,6 +46,35 @@ async function requireUserId(): Promise<number> {
     throw new Error("Unauthorized");
   }
   return session.userId;
+}
+
+/**
+ * Recalculate recordedStock and recordedBuyPrice (MAC) dari AccessoryUnit yang AVAILABLE.
+ * Dipanggil setelah setiap operasi purchase/sale/delete.
+ */
+async function recalculateAccessoryStock(
+  tx: Prisma.TransactionClient,
+  accessoryId: number,
+) {
+  const availableUnits = await tx.accessoryUnit.findMany({
+    where: { accessoryId, status: "AVAILABLE", deletedAt: null },
+    select: { buyPrice: true },
+  });
+
+  const newStock = availableUnits.length;
+  const newMAC =
+    newStock > 0
+      ? Math.round(
+          availableUnits.reduce((sum, u) => sum + u.buyPrice, 0) / newStock,
+        )
+      : 0;
+
+  await tx.accessory.update({
+    where: { id: accessoryId },
+    data: { recordedStock: newStock, recordedBuyPrice: newMAC },
+  });
+
+  return { newStock, newMAC };
 }
 
 // ============================================================
@@ -142,10 +172,21 @@ export async function getAccessoryById(
     const accessory = await prisma.accessory.findFirst({
       where: { id, deletedAt: null },
       include: {
-        // Only show non-deleted purchases
+        // Only show non-deleted purchases with their units
         purchases: {
           where: { deletedAt: null },
           orderBy: { createdAt: "desc" },
+          include: {
+            units: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: "asc" },
+            },
+          },
+        },
+        // All units for this accessory
+        units: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "asc" },
         },
         logs: {
           include: {
@@ -266,6 +307,7 @@ interface AddPurchaseInput {
   quantity: number;
   buyPricePerUnit: number;
   note?: string;
+  serialNumbers?: (string | null)[]; // Array of SN per unit, null = tanpa SN
 }
 
 export async function addAccessoryPurchase(
@@ -279,15 +321,24 @@ export async function addAccessoryPurchase(
         where: { id: input.accessoryId },
       });
 
-      // Hitung Moving Average Cost (MAC)
-      const currentTotalValue =
-        accessory.recordedStock * accessory.recordedBuyPrice;
-      const newPurchaseValue = input.quantity * input.buyPricePerUnit;
-      const newTotalStock = accessory.recordedStock + input.quantity;
-      const newMAC =
-        newTotalStock > 0
-          ? Math.round((currentTotalValue + newPurchaseValue) / newTotalStock)
-          : input.buyPricePerUnit;
+      // Validasi: jika ada serial number, cek duplikat global
+      const nonNullSNs = (input.serialNumbers ?? []).filter(
+        (sn): sn is string => !!sn && sn.trim().length > 0,
+      );
+      if (nonNullSNs.length > 0) {
+        const existingSN = await tx.accessoryUnit.findFirst({
+          where: {
+            serialNumber: { in: nonNullSNs },
+            deletedAt: null,
+          },
+          select: { serialNumber: true },
+        });
+        if (existingSN) {
+          throw new Error(
+            `Serial number "${existingSN.serialNumber}" sudah terdaftar di sistem.`,
+          );
+        }
+      }
 
       // Buat purchase record
       const purchase = await tx.accessoryPurchase.create({
@@ -295,19 +346,31 @@ export async function addAccessoryPurchase(
           accessoryId: input.accessoryId,
           quantity: input.quantity,
           buyPricePerUnit: input.buyPricePerUnit,
-          buyPriceTotal: newPurchaseValue,
+          buyPriceTotal: input.quantity * input.buyPricePerUnit,
           note: input.note,
         },
       });
 
-      // Update stok dan MAC di accessory
-      await tx.accessory.update({
-        where: { id: input.accessoryId },
-        data: {
-          recordedStock: newTotalStock,
-          recordedBuyPrice: newMAC,
-        },
-      });
+      // Buat AccessoryUnit per unit
+      for (let i = 0; i < input.quantity; i++) {
+        const rawSN = input.serialNumbers?.[i];
+        const sn = rawSN && rawSN.trim().length > 0 ? rawSN.trim() : null;
+        await tx.accessoryUnit.create({
+          data: {
+            accessoryId: input.accessoryId,
+            purchaseId: purchase.id,
+            serialNumber: sn,
+            buyPrice: input.buyPricePerUnit,
+            status: "AVAILABLE",
+          },
+        });
+      }
+
+      // Recalculate stock & MAC dari unit AVAILABLE
+      const { newStock, newMAC } = await recalculateAccessoryStock(
+        tx,
+        input.accessoryId,
+      );
 
       // Catat log
       await tx.accessoryLog.create({
@@ -318,7 +381,7 @@ export async function addAccessoryPurchase(
           userId,
           purchaseId: purchase.id,
           beforeRecordedStock: accessory.recordedStock,
-          afterRecordedStock: newTotalStock,
+          afterRecordedStock: newStock,
           beforeRecordedBuyPrice: accessory.recordedBuyPrice,
           afterRecordedBuyPrice: newMAC,
           logNote: `Pembelian ${input.quantity} unit @${input.buyPricePerUnit}${input.note ? ` — ${input.note}` : ""}`,
@@ -331,7 +394,11 @@ export async function addAccessoryPurchase(
     return { success: true };
   } catch (error) {
     console.error("addAccessoryPurchase error:", error);
-    return { success: false, error: "Gagal menambahkan pembelian aksesoris." };
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Gagal menambahkan pembelian aksesoris.";
+    return { success: false, error: message };
   }
 }
 
@@ -345,6 +412,7 @@ interface UpdatePurchaseInput {
   quantity: number;
   buyPricePerUnit: number;
   note?: string;
+  serialNumbers?: (string | null)[]; // Updated serial numbers for units
 }
 
 export async function updateAccessoryPurchase(
@@ -354,13 +422,18 @@ export async function updateAccessoryPurchase(
     const userId = await requireUserId();
 
     await prisma.$transaction(async (tx) => {
-      // Ambil data purchase lama
       const oldPurchase = await tx.accessoryPurchase.findUniqueOrThrow({
         where: { id: input.purchaseId },
       });
 
       const accessory = await tx.accessory.findUniqueOrThrow({
         where: { id: input.accessoryId },
+      });
+
+      // Get existing units for this purchase
+      const existingUnits = await tx.accessoryUnit.findMany({
+        where: { purchaseId: input.purchaseId, deletedAt: null },
+        orderBy: { createdAt: "asc" },
       });
 
       // Update purchase record
@@ -374,30 +447,67 @@ export async function updateAccessoryPurchase(
         },
       });
 
-      // ─── Incremental MAC formula ─────────────────────────────────────────
-      // Menggunakan pendekatan incremental agar perubahan unit yang terjual
-      // tetap diperhitungkan dengan benar.
-      // Formula: new_value = (stock × old_MAC) + value_delta
-      //          new_MAC   = new_value / new_stock
-      // ─────────────────────────────────────────────────────────────────────
-      const stockDelta = input.quantity - oldPurchase.quantity;
-      const valueDelta =
-        input.quantity * input.buyPricePerUnit -
-        oldPurchase.quantity * oldPurchase.buyPricePerUnit;
+      // ─── Adjust units ───
+      const qtyDelta = input.quantity - existingUnits.length;
 
-      const currentTotalValue =
-        accessory.recordedStock * accessory.recordedBuyPrice;
-      const newTotalValue = currentTotalValue + valueDelta;
-      const newStock = Math.max(0, accessory.recordedStock + stockDelta);
-      const newMAC = newStock > 0 ? Math.round(newTotalValue / newStock) : 0;
+      if (qtyDelta > 0) {
+        // Need to add more units
+        for (let i = 0; i < qtyDelta; i++) {
+          const snIndex = existingUnits.length + i;
+          const rawSN = input.serialNumbers?.[snIndex];
+          const sn = rawSN && rawSN.trim().length > 0 ? rawSN.trim() : null;
+          await tx.accessoryUnit.create({
+            data: {
+              accessoryId: input.accessoryId,
+              purchaseId: input.purchaseId,
+              serialNumber: sn,
+              buyPrice: input.buyPricePerUnit,
+              status: "AVAILABLE",
+            },
+          });
+        }
+      } else if (qtyDelta < 0) {
+        // Need to remove units (only AVAILABLE ones, from the end)
+        const availableUnits = existingUnits.filter(
+          (u) => u.status === "AVAILABLE",
+        );
+        const toRemoveCount = Math.abs(qtyDelta);
+        if (availableUnits.length < toRemoveCount) {
+          throw new Error(
+            `Tidak bisa mengurangi qty: ${toRemoveCount - availableUnits.length} unit sudah terjual.`,
+          );
+        }
+        const toRemove = availableUnits.slice(-toRemoveCount);
+        for (const unit of toRemove) {
+          await tx.accessoryUnit.update({
+            where: { id: unit.id },
+            data: { deletedAt: new Date() },
+          });
+        }
+      }
 
-      await tx.accessory.update({
-        where: { id: input.accessoryId },
-        data: {
-          recordedStock: newStock,
-          recordedBuyPrice: newMAC,
-        },
+      // Update buyPrice & serial numbers for remaining units
+      const remainingUnits = await tx.accessoryUnit.findMany({
+        where: { purchaseId: input.purchaseId, deletedAt: null },
+        orderBy: { createdAt: "asc" },
       });
+      for (let i = 0; i < remainingUnits.length; i++) {
+        const rawSN = input.serialNumbers?.[i];
+        const sn = rawSN && rawSN.trim().length > 0 ? rawSN.trim() : null;
+        await tx.accessoryUnit.update({
+          where: { id: remainingUnits[i].id },
+          data: {
+            buyPrice: input.buyPricePerUnit,
+            serialNumber: sn,
+          },
+        });
+      }
+
+      // Recalculate
+      const { newStock, newMAC } = await recalculateAccessoryStock(
+        tx,
+        input.accessoryId,
+      );
 
       // Catat log
       await tx.accessoryLog.create({
@@ -421,7 +531,11 @@ export async function updateAccessoryPurchase(
     return { success: true };
   } catch (error) {
     console.error("updateAccessoryPurchase error:", error);
-    return { success: false, error: "Gagal memperbarui data pembelian." };
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Gagal memperbarui data pembelian.";
+    return { success: false, error: message };
   }
 }
 
@@ -445,12 +559,17 @@ export async function deleteAccessoryPurchase(
         where: { id: accessoryId },
       });
 
-      // Validasi: tidak boleh hapus purchase jika stok akan jadi negatif
-      const newStock = accessory.recordedStock - purchase.quantity;
-      if (newStock < 0) {
+      // Validasi: tidak boleh hapus purchase jika ada unit yang sudah SOLD
+      const soldUnitsCount = await tx.accessoryUnit.count({
+        where: {
+          purchaseId,
+          status: "SOLD",
+          deletedAt: null,
+        },
+      });
+      if (soldUnitsCount > 0) {
         throw new Error(
-          `Tidak bisa menghapus: stok akan menjadi ${newStock}. ` +
-            `Pastikan tidak ada penjualan yang bergantung pada stok ini.`,
+          `Tidak bisa menghapus: ${soldUnitsCount} unit dari pembelian ini sudah terjual.`,
         );
       }
 
@@ -460,25 +579,21 @@ export async function deleteAccessoryPurchase(
         data: { deletedAt: new Date() },
       });
 
-      // ─── Incremental MAC formula ─────────────────────────────────────────
-      // Hapus kontribusi purchase ini dari nilai inventaris secara incremental
-      // agar unit yang sudah terjual tetap diperhitungkan.
-      // Formula: new_value = (stock × old_MAC) - (qty × price_per_unit)
-      //          new_MAC   = new_value / new_stock
-      // ─────────────────────────────────────────────────────────────────────
-      const removedValue = purchase.quantity * purchase.buyPricePerUnit;
-      const currentTotalValue =
-        accessory.recordedStock * accessory.recordedBuyPrice;
-      const newTotalValue = currentTotalValue - removedValue;
-      const newMAC = newStock > 0 ? Math.round(newTotalValue / newStock) : 0;
-
-      await tx.accessory.update({
-        where: { id: accessoryId },
-        data: {
-          recordedStock: newStock,
-          recordedBuyPrice: newMAC,
+      // Soft delete semua unit AVAILABLE dari purchase ini
+      await tx.accessoryUnit.updateMany({
+        where: {
+          purchaseId,
+          status: "AVAILABLE",
+          deletedAt: null,
         },
+        data: { deletedAt: new Date() },
       });
+
+      // Recalculate stock & MAC
+      const { newStock, newMAC } = await recalculateAccessoryStock(
+        tx,
+        accessoryId,
+      );
 
       // Catat log
       await tx.accessoryLog.create({
@@ -614,6 +729,12 @@ export async function deleteAccessory(id: number): Promise<ActionResult> {
 // READ — For Sell Page (available stock only)
 // ============================================================
 
+export type AccessoryUnitForSale = {
+  id: number;
+  serialNumber: string | null;
+  buyPrice: number;
+};
+
 export type AccessoryForSale = {
   id: number;
   name: string;
@@ -621,6 +742,7 @@ export type AccessoryForSale = {
   recordedStock: number;
   recordedBuyPrice: number;
   sellPrice: number;
+  availableUnits: AccessoryUnitForSale[];
 };
 
 export async function getAccessoriesForSale(): Promise<
@@ -636,10 +758,25 @@ export async function getAccessoriesForSale(): Promise<
         recordedStock: true,
         recordedBuyPrice: true,
         sellPrice: true,
+        units: {
+          where: { status: "AVAILABLE", deletedAt: null },
+          select: {
+            id: true,
+            serialNumber: true,
+            buyPrice: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
       orderBy: { name: "asc" },
     });
-    return { success: true, data: accessories };
+
+    const result: AccessoryForSale[] = accessories.map((a) => ({
+      ...a,
+      availableUnits: a.units,
+    }));
+
+    return { success: true, data: result };
   } catch (error) {
     console.error("getAccessoriesForSale error:", error);
     return { success: false, error: "Gagal mengambil daftar aksesoris." };
@@ -652,7 +789,7 @@ export async function getAccessoriesForSale(): Promise<
 
 interface SaleItem {
   accessoryId: number;
-  quantity: number;
+  unitIds: number[]; // ID unit yang dipilih (untuk yang ada SN maupun tanpa SN)
 }
 
 interface CreateAccessorySaleInput {
@@ -697,105 +834,127 @@ export async function createAccessorySale(
         }),
       ]);
 
-      // 1. Ambil data semua aksesoris yang akan dijual (lock untuk konsistensi)
-      const accessoryIds = input.items.map((i) => i.accessoryId);
-      const accessories = await tx.accessory.findMany({
-        where: { id: { in: accessoryIds }, deletedAt: null },
+      // 1. Collect all unit IDs and validate
+      const allUnitIds = input.items.flatMap((i) => i.unitIds);
+      const units = await tx.accessoryUnit.findMany({
+        where: { id: { in: allUnitIds }, deletedAt: null },
       });
+      const unitMap = new Map(units.map((u) => [u.id, u]));
 
-      // Buat map untuk lookup cepat
-      const accessoryMap = new Map(accessories.map((a) => [a.id, a]));
-
-      // 2. Validasi stok mencukupi
-      for (const item of input.items) {
-        const acc = accessoryMap.get(item.accessoryId);
-        if (!acc) {
-          throw new Error(`Aksesoris ID ${item.accessoryId} tidak ditemukan.`);
+      // Validate all units exist and are AVAILABLE
+      for (const unitId of allUnitIds) {
+        const unit = unitMap.get(unitId);
+        if (!unit) {
+          throw new Error(`Unit ID ${unitId} tidak ditemukan.`);
         }
-        if (acc.recordedStock < item.quantity) {
+        if (unit.status !== "AVAILABLE") {
           throw new Error(
-            `Stok "${acc.name}" tidak mencukupi. Tersedia: ${acc.recordedStock}, diminta: ${item.quantity}.`,
+            `Unit ID ${unitId} (SN: ${unit.serialNumber ?? "Tanpa SN"}) sudah terjual.`,
           );
         }
       }
 
-      // 3. Hitung total transaksi
+      // 2. Get accessories for pricing
+      const accessoryIds = [...new Set(input.items.map((i) => i.accessoryId))];
+      const accessories = await tx.accessory.findMany({
+        where: { id: { in: accessoryIds }, deletedAt: null },
+      });
+      const accessoryMap = new Map(accessories.map((a) => [a.id, a]));
+
+      // 3. Calculate totals and build sale items
       let totalPrice = 0;
       let totalProfit = 0;
 
-      const saleItemsData = input.items.map((item) => {
-        const acc = accessoryMap.get(item.accessoryId)!;
-        // Freeze harga saat transaksi terjadi
-        const sellPricePerUnit = acc.sellPrice;
-        const recordedBuyPricePerUnit = acc.recordedBuyPrice;
-        const profitPerUnit = sellPricePerUnit - recordedBuyPricePerUnit;
-
-        totalPrice += sellPricePerUnit * item.quantity;
-        totalProfit += profitPerUnit * item.quantity;
-
-        return {
-          accessoryId: item.accessoryId,
-          quantity: item.quantity,
-          sellPricePerUnit,
-          recordedBuyPricePerUnit,
-          profitPerUnit,
-        };
-      });
-
-      // 4. Buat AccessorySale header
+      // 4. Create sale header
+      // (totalPrice/totalProfit will be updated after processing items)
       const sale = await tx.accessorySale.create({
         data: {
           customerId: input.customerId,
           workerId: input.workerId,
           feeWorker: input.feeWorker,
-          totalPrice,
-          totalProfit,
+          totalPrice: 0,
+          totalProfit: 0,
         },
       });
 
-      // 5. Buat setiap AccessorySaleItem & update stok + catat log per item
-      for (const itemData of saleItemsData) {
-        const acc = accessoryMap.get(itemData.accessoryId)!;
-        const newStock = acc.recordedStock - itemData.quantity;
+      // 5. Process each item
+      for (const item of input.items) {
+        const acc = accessoryMap.get(item.accessoryId);
+        if (!acc) {
+          throw new Error(`Aksesoris ID ${item.accessoryId} tidak ditemukan.`);
+        }
 
-        // Buat sale item
+        const quantity = item.unitIds.length;
+        const itemUnits = item.unitIds.map((id) => unitMap.get(id)!);
+
+        // Calculate buy price for this batch (average of selected units)
+        const totalBuyPrice = itemUnits.reduce(
+          (sum, u) => sum + u.buyPrice,
+          0,
+        );
+        const avgBuyPrice = Math.round(totalBuyPrice / quantity);
+
+        const sellPricePerUnit = acc.sellPrice;
+        const profitPerUnit = sellPricePerUnit - avgBuyPrice;
+
+        totalPrice += sellPricePerUnit * quantity;
+        totalProfit += profitPerUnit * quantity;
+
+        // Create sale item
         const saleItem = await tx.accessorySaleItem.create({
           data: {
             saleId: sale.id,
-            accessoryId: itemData.accessoryId,
-            quantity: itemData.quantity,
-            recordedBuyPricePerUnit: itemData.recordedBuyPricePerUnit,
-            sellPricePerUnit: itemData.sellPricePerUnit,
-            profitPerUnit: itemData.profitPerUnit,
+            accessoryId: item.accessoryId,
+            quantity,
+            recordedBuyPricePerUnit: avgBuyPrice,
+            sellPricePerUnit,
+            profitPerUnit,
           },
         });
 
-        // Kurangi stok — MAC TIDAK berubah karena COGS sudah ter-freeze
-        await tx.accessory.update({
-          where: { id: itemData.accessoryId },
-          data: { recordedStock: newStock },
-        });
+        // Mark units as SOLD
+        for (const unit of itemUnits) {
+          await tx.accessoryUnit.update({
+            where: { id: unit.id },
+            data: {
+              status: "SOLD",
+              saleItemId: saleItem.id,
+            },
+          });
+        }
 
-        // Catat log per aksesoris yang terjual
+        // Recalculate stock
+        const { newStock, newMAC } = await recalculateAccessoryStock(
+          tx,
+          item.accessoryId,
+        );
+
+        // Log
         await tx.accessoryLog.create({
           data: {
             type: "UPDATE",
             kind: "SALE",
-            accessoryId: itemData.accessoryId,
+            accessoryId: item.accessoryId,
             userId,
             saleId: sale.id,
             saleItemId: saleItem.id,
             beforeRecordedStock: acc.recordedStock,
             afterRecordedStock: newStock,
             beforeRecordedBuyPrice: acc.recordedBuyPrice,
-            afterRecordedBuyPrice: acc.recordedBuyPrice, // MAC tidak berubah saat penjualan
+            afterRecordedBuyPrice: newMAC,
             logNote:
-              `Terjual ${itemData.quantity} unit @${itemData.sellPricePerUnit} ` +
-              `(profit: ${itemData.profitPerUnit}/unit) ke ${customer.name} ` +
+              `Terjual ${quantity} unit @${sellPricePerUnit} ` +
+              `(profit: ${profitPerUnit}/unit) ke ${customer.name} ` +
               `oleh worker ${worker.name} (fee: ${input.feeWorker})`,
           },
         });
       }
+
+      // Update sale totals
+      await tx.accessorySale.update({
+        where: { id: sale.id },
+        data: { totalPrice, totalProfit },
+      });
 
       return { id: sale.id, totalPrice, totalProfit };
     });
@@ -825,6 +984,7 @@ export type AccessorySaleHistoryData = Prisma.AccessorySaleGetPayload<{
     items: {
       include: {
         accessory: true;
+        units: true;
       };
     };
   };
@@ -904,7 +1064,7 @@ export async function getAccessorySales(
         customer: true,
         worker: true,
         items: {
-          include: { accessory: true },
+          include: { accessory: true, units: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -1050,33 +1210,36 @@ export async function deleteAccessorySale(
           items: {
             include: {
               accessory: true,
+              units: true,
             },
           },
         },
       });
 
+      // Soft delete the sale
       await tx.accessorySale.update({
         where: { id: saleId },
         data: { deletedAt: new Date() },
       });
 
       for (const item of sale.items) {
-        const currentTotalValue =
-          item.accessory.recordedStock * item.accessory.recordedBuyPrice;
-        const returnedValue = item.quantity * item.recordedBuyPricePerUnit;
-        const newStock = item.accessory.recordedStock + item.quantity;
-        const newRecordedBuyPrice =
-          newStock > 0
-            ? Math.round((currentTotalValue + returnedValue) / newStock)
-            : 0;
-
-        await tx.accessory.update({
-          where: { id: item.accessoryId },
+        // Restore units back to AVAILABLE
+        await tx.accessoryUnit.updateMany({
+          where: {
+            saleItemId: item.id,
+            status: "SOLD",
+          },
           data: {
-            recordedStock: newStock,
-            recordedBuyPrice: newRecordedBuyPrice,
+            status: "AVAILABLE",
+            saleItemId: null,
           },
         });
+
+        // Recalculate stock & MAC
+        const { newStock, newMAC } = await recalculateAccessoryStock(
+          tx,
+          item.accessoryId,
+        );
 
         await tx.accessoryLog.create({
           data: {
@@ -1089,7 +1252,7 @@ export async function deleteAccessorySale(
             beforeRecordedStock: item.accessory.recordedStock,
             afterRecordedStock: newStock,
             beforeRecordedBuyPrice: item.accessory.recordedBuyPrice,
-            afterRecordedBuyPrice: newRecordedBuyPrice,
+            afterRecordedBuyPrice: newMAC,
             logNote:
               `Hapus penjualan #${sale.id}: kembalikan ${item.quantity} unit ` +
               `dari transaksi ${sale.customer.name} / worker ${sale.worker.name}`,

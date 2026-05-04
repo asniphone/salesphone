@@ -3,7 +3,7 @@
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAccessorySale } from "@/actions/accessory";
-import type { AccessoryForSale } from "@/actions/accessory";
+import type { AccessoryForSale, AccessoryUnitForSale } from "@/actions/accessory";
 import { createCustomer as createCustomerAction } from "@/actions/customer";
 import { sendAccessorySaleInvoiceWhatsApp } from "@/actions/message";
 import type { WorkerData } from "@/actions/worker";
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +43,8 @@ import {
   Search,
   UserPlus,
   Receipt,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 function formatCurrency(value: number): string {
@@ -52,9 +55,10 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+// Each cart item tracks selected unit IDs
 interface CartItem {
   accessory: AccessoryForSale;
-  quantity: number;
+  selectedUnitIds: number[];
 }
 
 interface Props {
@@ -67,11 +71,10 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedAccessoryId, setExpandedAccessoryId] = useState<number | null>(null);
 
-  // Customer state
   const [customerList, setCustomerList] = useState(customers);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
@@ -80,67 +83,100 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [feeWorker, setFeeWorker] = useState("0");
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
-  // Filtered accessories
   const filteredAccessories = accessories.filter((acc) =>
     acc.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  // Cart helpers
-  function addToCart(accessory: AccessoryForSale) {
+  // Check if a unit is already in any cart item
+  function isUnitInCart(unitId: number): boolean {
+    return cart.some((item) => item.selectedUnitIds.includes(unitId));
+  }
+
+  // Toggle a single unit (with SN) selection
+  function toggleUnit(accessory: AccessoryForSale, unitId: number) {
     setCart((prev) => {
       const existing = prev.find((item) => item.accessory.id === accessory.id);
       if (existing) {
-        if (existing.quantity >= accessory.recordedStock) {
-          toast.error(`Stok "${accessory.name}" maksimal ${accessory.recordedStock} unit.`);
-          return prev;
+        const isSelected = existing.selectedUnitIds.includes(unitId);
+        if (isSelected) {
+          const newIds = existing.selectedUnitIds.filter((id) => id !== unitId);
+          if (newIds.length === 0) {
+            return prev.filter((item) => item.accessory.id !== accessory.id);
+          }
+          return prev.map((item) =>
+            item.accessory.id === accessory.id
+              ? { ...item, selectedUnitIds: newIds }
+              : item,
+          );
+        } else {
+          return prev.map((item) =>
+            item.accessory.id === accessory.id
+              ? { ...item, selectedUnitIds: [...item.selectedUnitIds, unitId] }
+              : item,
+          );
         }
-        return prev.map((item) =>
-          item.accessory.id === accessory.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
-        );
       }
-      return [...prev, { accessory, quantity: 1 }];
+      return [...prev, { accessory, selectedUnitIds: [unitId] }];
     });
   }
 
-  function updateQty(accessoryId: number, newQty: number) {
-    const acc = accessories.find((a) => a.id === accessoryId);
-    if (!acc) return;
-    if (newQty < 1) {
-      removeFromCart(accessoryId);
-      return;
-    }
-    if (newQty > acc.recordedStock) {
-      toast.error(`Stok "${acc.name}" maksimal ${acc.recordedStock} unit.`);
-      return;
-    }
-    setCart((prev) =>
-      prev.map((item) =>
-        item.accessory.id === accessoryId ? { ...item, quantity: newQty } : item,
-      ),
-    );
+  // For no-SN units: set quantity (picks first N available no-SN units)
+  function setNoSnQuantity(accessory: AccessoryForSale, qty: number) {
+    const noSnUnits = accessory.availableUnits.filter((u) => !u.serialNumber);
+    const snUnits = accessory.availableUnits.filter((u) => u.serialNumber);
+    const clampedQty = Math.max(0, Math.min(qty, noSnUnits.length));
+
+    setCart((prev) => {
+      const existing = prev.find((item) => item.accessory.id === accessory.id);
+      // Keep any SN-based selections
+      const selectedSnIds = existing
+        ? existing.selectedUnitIds.filter((id) =>
+            snUnits.some((u) => u.id === id),
+          )
+        : [];
+      const selectedNoSnIds = noSnUnits.slice(0, clampedQty).map((u) => u.id);
+      const allIds = [...selectedSnIds, ...selectedNoSnIds];
+
+      if (allIds.length === 0) {
+        return prev.filter((item) => item.accessory.id !== accessory.id);
+      }
+      if (existing) {
+        return prev.map((item) =>
+          item.accessory.id === accessory.id
+            ? { ...item, selectedUnitIds: allIds }
+            : item,
+        );
+      }
+      return [...prev, { accessory, selectedUnitIds: allIds }];
+    });
   }
 
   function removeFromCart(accessoryId: number) {
     setCart((prev) => prev.filter((item) => item.accessory.id !== accessoryId));
+    if (expandedAccessoryId === accessoryId) setExpandedAccessoryId(null);
   }
 
-  // Totals
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  // Computed values
+  const totalItems = cart.reduce((sum, item) => sum + item.selectedUnitIds.length, 0);
   const totalPrice = cart.reduce(
-    (sum, item) => sum + item.accessory.sellPrice * item.quantity,
+    (sum, item) => sum + item.accessory.sellPrice * item.selectedUnitIds.length,
     0,
   );
-  const totalProfit = cart.reduce(
-    (sum, item) =>
+  const totalProfit = cart.reduce((sum, item) => {
+    const units = item.selectedUnitIds.map(
+      (id) => item.accessory.availableUnits.find((u) => u.id === id)!,
+    );
+    return (
       sum +
-      (item.accessory.sellPrice - item.accessory.recordedBuyPrice) * item.quantity,
-    0,
-  );
+      units.reduce(
+        (s, u) => s + (item.accessory.sellPrice - u.buyPrice),
+        0,
+      )
+    );
+  }, 0);
 
-  // Create new customer inline
   function handleCreateCustomer() {
     if (!newCustomerName.trim()) {
       toast.error("Nama customer wajib diisi.");
@@ -166,9 +202,6 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
     });
   }
 
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-
-  // Submit sale validation
   function handlePreSubmit() {
     if (cart.length === 0) {
       toast.error("Tambahkan minimal 1 item ke keranjang.");
@@ -182,13 +215,11 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
       toast.error("Pilih worker terlebih dahulu.");
       return;
     }
-
     const parsedFeeWorker = parseInt(feeWorker, 10);
     if (Number.isNaN(parsedFeeWorker) || parsedFeeWorker < 0) {
       toast.error("Fee worker wajib diisi dengan angka 0 atau lebih.");
       return;
     }
-
     setIsConfirmOpen(true);
   }
 
@@ -202,7 +233,7 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
         feeWorker: parsedFeeWorker,
         items: cart.map((item) => ({
           accessoryId: item.accessory.id,
-          quantity: item.quantity,
+          unitIds: item.selectedUnitIds,
         })),
       });
 
@@ -210,7 +241,6 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
         toast.success(
           `Penjualan berhasil! Total: ${formatCurrency(result.data.totalPrice)}`,
         );
-
         if (sendInvoice) {
           const invoiceResult = await sendAccessorySaleInvoiceWhatsApp(result.data.id);
           if (invoiceResult.success) {
@@ -219,12 +249,21 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
             toast.error(invoiceResult.error ?? "Penjualan berhasil, namun gagal mengirim Invoice WA.");
           }
         }
-
         router.push("/accessory");
       } else {
         toast.error(result.error ?? "Gagal memproses penjualan.");
       }
     });
+  }
+
+  // Helper: get current no-SN qty in cart for an accessory
+  function getNoSnQtyInCart(accessory: AccessoryForSale): number {
+    const cartItem = cart.find((c) => c.accessory.id === accessory.id);
+    if (!cartItem) return 0;
+    const noSnUnits = accessory.availableUnits.filter((u) => !u.serialNumber);
+    return cartItem.selectedUnitIds.filter((id) =>
+      noSnUnits.some((u) => u.id === id),
+    ).length;
   }
 
   return (
@@ -239,7 +278,6 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -250,59 +288,144 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
               />
             </div>
 
-            {/* Accessory Grid */}
             {filteredAccessories.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 {searchQuery ? "Tidak ada aksesoris yang cocok." : "Tidak ada aksesoris dengan stok tersedia."}
               </p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[480px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
                 {filteredAccessories.map((acc) => {
                   const inCart = cart.find((c) => c.accessory.id === acc.id);
-                  const isOutOfStock = acc.recordedStock === 0;
+                  const isExpanded = expandedAccessoryId === acc.id;
+                  const snUnits = acc.availableUnits.filter((u) => u.serialNumber);
+                  const noSnUnits = acc.availableUnits.filter((u) => !u.serialNumber);
+                  const noSnQtyInCart = getNoSnQtyInCart(acc);
+
                   return (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      disabled={isOutOfStock}
-                      onClick={() => addToCart(acc)}
-                      className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors w-full ${isOutOfStock
-                          ? "opacity-40 cursor-not-allowed bg-muted"
-                          : inCart
-                            ? "border-primary bg-primary/5 hover:bg-primary/10"
-                            : "hover:bg-muted/60 hover:border-muted-foreground/30"
-                        }`}
-                    >
-                      <div className="relative h-12 w-12 shrink-0 rounded-md overflow-hidden border">
-                        <Image
-                          src={acc.images[0] ?? IMAGE_PLACEHOLDER}
-                          alt={acc.name}
-                          fill
-                          className="object-cover"
-                          sizes="48px"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm leading-tight truncate">{acc.name}</p>
-                        <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                          {formatCurrency(acc.sellPrice)}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <Badge
-                            variant={acc.recordedStock <= 5 ? "destructive" : "secondary"}
-                            className={`text-xs h-5 ${acc.recordedStock > 5 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" : ""}`}
-                          >
-                            Stok: {acc.recordedStock}
-                          </Badge>
-                          {inCart && (
-                            <Badge variant="outline" className="text-xs h-5 border-primary text-primary">
-                              Di keranjang: {inCart.quantity}
+                    <div key={acc.id} className={`rounded-lg border transition-colors ${
+                      inCart
+                        ? "border-primary bg-primary/5"
+                        : "hover:border-muted-foreground/30"
+                    }`}>
+                      {/* Header row */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedAccessoryId(isExpanded ? null : acc.id)}
+                        className="flex items-center gap-3 p-3 text-left w-full"
+                      >
+                        <div className="relative h-12 w-12 shrink-0 rounded-md overflow-hidden border">
+                          <Image
+                            src={acc.images[0] ?? IMAGE_PLACEHOLDER}
+                            alt={acc.name}
+                            fill
+                            className="object-cover"
+                            sizes="48px"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm leading-tight truncate">{acc.name}</p>
+                          <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                            {formatCurrency(acc.sellPrice)}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Badge
+                              variant={acc.recordedStock <= 5 ? "destructive" : "secondary"}
+                              className={`text-xs h-5 ${acc.recordedStock > 5 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" : ""}`}
+                            >
+                              Stok: {acc.recordedStock}
                             </Badge>
+                            {inCart && (
+                              <Badge variant="outline" className="text-xs h-5 border-primary text-primary">
+                                Dipilih: {inCart.selectedUnitIds.length}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                      </button>
+
+                      {/* Expanded: Unit selection */}
+                      {isExpanded && (
+                        <div className="px-3 pb-3 space-y-2">
+                          <Separator />
+
+                          {/* Units with SN */}
+                          {snUnits.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-medium text-muted-foreground">Pilih Serial Number:</p>
+                              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                                {snUnits.map((unit) => {
+                                  const checked = inCart?.selectedUnitIds.includes(unit.id) ?? false;
+                                  return (
+                                    <label
+                                      key={unit.id}
+                                      className="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={() => toggleUnit(acc, unit.id)}
+                                      />
+                                      <span className="text-sm font-mono flex-1">{unit.serialNumber}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        Modal: {formatCurrency(unit.buyPrice)}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Units without SN */}
+                          {noSnUnits.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Tanpa SN ({noSnUnits.length} tersedia):
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setNoSnQuantity(acc, noSnQtyInCart - 1)}
+                                  disabled={noSnQtyInCart <= 0}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <Input
+                                  type="number"
+                                  value={noSnQtyInCart}
+                                  onChange={(e) =>
+                                    setNoSnQuantity(acc, parseInt(e.target.value, 10) || 0)
+                                  }
+                                  className="h-8 w-16 text-center text-sm"
+                                  min={0}
+                                  max={noSnUnits.length}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setNoSnQuantity(acc, noSnQtyInCart + 1)}
+                                  disabled={noSnQtyInCart >= noSnUnits.length}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                                <span className="text-xs text-muted-foreground">
+                                  / {noSnUnits.length}
+                                </span>
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-                      <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -454,72 +577,57 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
                   {cart.map((item) => (
                     <div
                       key={item.accessory.id}
-                      className="flex items-center gap-2 rounded-lg border p-2.5"
+                      className="rounded-lg border p-2.5 space-y-1.5"
                     >
-                      <div className="relative h-9 w-9 shrink-0 rounded overflow-hidden border">
-                        <Image
-                          src={item.accessory.images[0] ?? IMAGE_PLACEHOLDER}
-                          alt={item.accessory.name}
-                          fill
-                          className="object-cover"
-                          sizes="36px"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-tight truncate">
-                          {item.accessory.name}
-                        </p>
-                        <p className="text-xs font-mono text-muted-foreground">
-                          {formatCurrency(item.accessory.sellPrice)} / unit
-                        </p>
-                      </div>
-                      {/* Qty controls */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => updateQty(item.accessory.id, item.quantity - 1)}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            updateQty(item.accessory.id, parseInt(e.target.value, 10) || 0)
-                          }
-                          className="h-7 w-12 text-center text-sm px-1"
-                          min={1}
-                          max={item.accessory.recordedStock}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => updateQty(item.accessory.id, item.quantity + 1)}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
+                      <div className="flex items-center gap-2">
+                        <div className="relative h-9 w-9 shrink-0 rounded overflow-hidden border">
+                          <Image
+                            src={item.accessory.images[0] ?? IMAGE_PLACEHOLDER}
+                            alt={item.accessory.name}
+                            fill
+                            className="object-cover"
+                            sizes="36px"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium leading-tight truncate">
+                            {item.accessory.name}
+                          </p>
+                          <p className="text-xs font-mono text-muted-foreground">
+                            {formatCurrency(item.accessory.sellPrice)} × {item.selectedUnitIds.length}
+                          </p>
+                        </div>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive ml-1"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
                           onClick={() => removeFromCart(item.accessory.id)}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
+                      {/* Show selected SNs */}
+                      {item.selectedUnitIds.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {item.selectedUnitIds.map((unitId) => {
+                            const unit = item.accessory.availableUnits.find(
+                              (u) => u.id === unitId,
+                            );
+                            return (
+                              <Badge key={unitId} variant="outline" className="text-xs">
+                                {unit?.serialNumber ?? "Tanpa SN"}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
 
                 <Separator />
 
-                {/* Ringkasan */}
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal ({totalItems} item)</span>

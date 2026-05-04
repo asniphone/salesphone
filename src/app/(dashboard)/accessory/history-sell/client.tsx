@@ -229,14 +229,25 @@ export function AccessoryHistorySellClient({
                 <TableCell>
                   <div className="flex flex-col gap-1">
                     {sale.items.map((item) => (
-                      <div key={item.id} className="flex items-center gap-2 text-sm">
-                        <Badge variant="secondary" className="px-1.5 py-0">
-                          {item.quantity}x
-                        </Badge>
-                        <span>{item.accessory.name}</span>
-                        <span className="text-muted-foreground text-xs">
-                          ({formatCurrency(item.sellPricePerUnit)})
-                        </span>
+                      <div key={item.id} className="text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="px-1.5 py-0">
+                            {item.quantity}x
+                          </Badge>
+                          <span>{item.accessory.name}</span>
+                          <span className="text-muted-foreground text-xs">
+                            ({formatCurrency(item.sellPricePerUnit)})
+                          </span>
+                        </div>
+                        {item.units && item.units.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5 ml-8">
+                            {item.units.map((u) => (
+                              <Badge key={u.id} variant="outline" className="text-xs font-mono">
+                                {u.serialNumber ?? "Tanpa SN"}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -351,7 +362,18 @@ export function AccessoryHistorySellClient({
                   <TableBody>
                     {detailSale.items.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell>{item.accessory.name}</TableCell>
+                        <TableCell>
+                          <div>{item.accessory.name}</div>
+                          {item.units && item.units.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.units.map((u) => (
+                                <Badge key={u.id} variant="outline" className="text-xs font-mono">
+                                  {u.serialNumber ?? "Tanpa SN"}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
                         <TableCell className="text-right">
                           {formatCurrency(item.sellPricePerUnit)}
