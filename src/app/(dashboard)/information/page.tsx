@@ -10,7 +10,8 @@ export default async function InformationPage() {
   if (!userAccess) redirect("/login");
   if (!userAccess.accessInformationRead) redirect("/profile?forbidden=1");
 
-  const result = await getCommonInformation();
+  const raw = await getCommonInformation();
+  const result = await raw()
 
   const information = result.data ?? {
     storeName: "",

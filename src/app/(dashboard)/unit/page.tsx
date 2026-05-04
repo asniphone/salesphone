@@ -202,7 +202,7 @@ export default async function UnitListPage({ searchParams }: UnitListPageProps) 
                           </div>
                         </TableCell>
                         <TableCell className="text-right text-sm">
-                          {unit.grossProfit ? formatCurrency(unit.grossProfit) : "-"}
+                          {unit.grossProfit && unit.buyPrice && unit.soldPrice ? formatCurrency(unit.grossProfit) : "-"}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-xs">
                           {formatDate(unit.createdAt)}

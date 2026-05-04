@@ -221,8 +221,8 @@ export async function createUnit(
           buyAt: input.buyAt,
           buyPrice: input.buyPrice,
           customerId: input.customerId,
-          grossProfit: 0,
-          netProfit: 0,
+          grossProfit: input.buyPrice ? 0 - input.buyPrice : 0,
+          netProfit: input.buyPrice ? 0 - input.buyPrice : 0,
         },
         include: { customer: true, worker: true },
       });
@@ -395,7 +395,12 @@ export async function deleteUnit(id: number): Promise<ActionResult> {
       // 2. Soft delete
       await tx.unit.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: {
+          deletedAt: new Date(),
+          imei: before.imei
+            ? `deleted-${Date.now()}-${before.imei}`
+            : undefined,
+        },
       });
 
       // 3. Catat log DELETE

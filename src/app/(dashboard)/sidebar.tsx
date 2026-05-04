@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/actions/auth";
 import type { UserAccess } from "@/lib/access";
+import { CommonInformation } from "@prisma/client";
 
 type SubMenuItem = { title: string; url: string };
 
@@ -47,9 +48,10 @@ type MenuItem = {
 
 interface DashboardSidebarProps {
   userAccess: UserAccess;
+  commonInformation: CommonInformation | null;
 }
 
-export function DashboardSidebar({ userAccess }: DashboardSidebarProps) {
+export function DashboardSidebar({ userAccess, commonInformation }: DashboardSidebarProps) {
   const pathname = usePathname();
 
   // Build menu items based on access
@@ -125,7 +127,7 @@ export function DashboardSidebar({ userAccess }: DashboardSidebarProps) {
             <Smartphone className="h-4 w-4" />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">POS Internal</span>
+            <span className="text-sm font-semibold">{commonInformation?.storeName || "POS Internal"}</span>
             <span className="text-xs text-muted-foreground">v0.1.0</span>
           </div>
         </div>

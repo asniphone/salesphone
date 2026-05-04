@@ -217,7 +217,8 @@ export async function createUser(
       if (existingEmail.deletedAt) {
         return {
           success: false,
-          error: "Email sudah digunakan oleh user yang dihapus. Coba gunakan email lain.",
+          error:
+            "Email sudah digunakan oleh user yang dihapus. Coba gunakan email lain.",
         };
       }
       return { success: false, error: "Email sudah terdaftar." };
@@ -252,7 +253,7 @@ export async function createUser(
     const user = await prisma.user.create({
       data: {
         name: input.name,
-        email: input.email,
+        email: input.email.toLowerCase().trim(),
         phone: input.phone,
         password: hashedPassword,
         isSuperAdmin: false,
@@ -298,14 +299,17 @@ export async function updateUser(
     });
 
     if (existingPhone && existingPhone.id !== input.id) {
-      return { success: false, error: "Nomor telepon sudah terdaftar oleh user lain." };
+      return {
+        success: false,
+        error: "Nomor telepon sudah terdaftar oleh user lain.",
+      };
     }
 
     const updated = await prisma.user.update({
       where: { id: input.id },
       data: {
         name: input.name,
-        email: input.email,
+        email: input.email.toLowerCase().trim(),
         phone: input.phone,
       },
       omit: { password: true },
@@ -360,7 +364,10 @@ export async function updateUserAccess(
     }
 
     if (target.isSuperAdmin) {
-      return { success: false, error: "Tidak dapat mengubah hak akses Super Admin." };
+      return {
+        success: false,
+        error: "Tidak dapat mengubah hak akses Super Admin.",
+      };
     }
 
     // Build access data
@@ -394,7 +401,7 @@ export async function deleteUser(id: number): Promise<ActionResult> {
   try {
     const existing = await prisma.user.findUnique({
       where: { id },
-      select: { email: true, phone: true }
+      select: { email: true, phone: true },
     });
 
     if (!existing) {

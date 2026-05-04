@@ -59,7 +59,7 @@ export async function register(input: RegisterInput): Promise<ActionResult> {
     const user = await prisma.user.create({
       data: {
         name: "Superadmin",
-        email: input.email,
+        email: input.email.toLowerCase().trim(),
         phone: input.phone,
         password: hashedPassword,
         isSuperAdmin: true,
@@ -86,8 +86,13 @@ interface LoginInput {
 
 export async function login(input: LoginInput): Promise<ActionResult> {
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: input.email },
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: input.email.trim(),
+          mode: "insensitive",
+        },
+      },
     });
 
     if (!user || user.deletedAt) {
@@ -125,7 +130,9 @@ export interface RequestOtpResult extends ActionResult {
   cooldownMs?: number; // Sisa waktu cooldown (dalam ms) jika sedang dalam cooldown
 }
 
-export async function requestPasswordResetOtp(phone: string): Promise<RequestOtpResult> {
+export async function requestPasswordResetOtp(
+  phone: string,
+): Promise<RequestOtpResult> {
   try {
     const cleanPhone = phone.trim();
 
@@ -149,7 +156,7 @@ export async function requestPasswordResetOtp(phone: string): Promise<RequestOtp
       const now = new Date();
       const diffMs = now.getTime() - lastOtp.createdAt.getTime();
       const cooldownMs = 60 * 1000; // 1 menit
-      
+
       if (diffMs < cooldownMs) {
         return {
           success: false,
@@ -178,7 +185,10 @@ export async function requestPasswordResetOtp(phone: string): Promise<RequestOtp
     const sent = await sendFonnteMessage([cleanPhone], message);
 
     if (!sent) {
-      return { success: false, error: "Gagal mengirim pesan WhatsApp. Coba lagi nanti." };
+      return {
+        success: false,
+        error: "Gagal mengirim pesan WhatsApp. Coba lagi nanti.",
+      };
     }
 
     return { success: true };
@@ -188,7 +198,11 @@ export async function requestPasswordResetOtp(phone: string): Promise<RequestOtp
   }
 }
 
-export async function resetPasswordWithOtp(phone: string, otp: string, newPasswordRaw: string): Promise<ActionResult> {
+export async function resetPasswordWithOtp(
+  phone: string,
+  otp: string,
+  newPasswordRaw: string,
+): Promise<ActionResult> {
   try {
     const cleanPhone = phone.trim();
 
@@ -210,7 +224,10 @@ export async function resetPasswordWithOtp(phone: string, otp: string, newPasswo
     });
 
     if (!validOtp) {
-      return { success: false, error: "Kode OTP salah atau sudah kedaluwarsa." };
+      return {
+        success: false,
+        error: "Kode OTP salah atau sudah kedaluwarsa.",
+      };
     }
 
     // Hash password baru
@@ -236,6 +253,9 @@ export async function resetPasswordWithOtp(phone: string, otp: string, newPasswo
     return { success: true };
   } catch (error) {
     console.error("resetPasswordWithOtp error:", error);
-    return { success: false, error: "Terjadi kesalahan saat mereset password." };
+    return {
+      success: false,
+      error: "Terjadi kesalahan saat mereset password.",
+    };
   }
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { CACHE_TAG } from "@/constants/cache-tag";
 import type { Prisma } from "@prisma/client";
 
@@ -22,21 +22,46 @@ interface UpsertCommonInformationInput {
   unitFeePercentage: number;
 }
 
-export async function getCommonInformation(): Promise<
-  ActionResult<CommonInformationData | null>
-> {
-  try {
-    const information = await prisma.commonInformation.findFirst({
-      where: { deletedAt: null },
-      orderBy: { id: "desc" },
-    });
+// export async function getCommonInformation(): Promise<
+//   ActionResult<CommonInformationData | null>
+// > {
+//   try {
+//     const information = await prisma.commonInformation.findFirst({
+//       where: { deletedAt: null },
+//       orderBy: { id: "desc" },
+//     });
 
-    return { success: true, data: information };
-  } catch (error) {
-    console.error("getCommonInformation error:", error);
-    return { success: false, error: "Gagal mengambil data informasi toko." };
-  }
-}
+//     return { success: true, data: information };
+//   } catch (error) {
+//     console.error("getCommonInformation error:", error);
+//     return { success: false, error: "Gagal mengambil data informasi toko." };
+//   }
+// }
+
+export const getCommonInformation = async () =>
+  unstable_cache(
+    async (): Promise<ActionResult<CommonInformationData | null>> => {
+      try {
+        const information = await prisma.commonInformation.findFirst({
+          where: { deletedAt: null },
+          orderBy: { id: "desc" },
+        });
+
+        return { success: true, data: information };
+      } catch (error) {
+        console.error("getCommonInformation error:", error);
+        return {
+          success: false,
+          error: "Gagal mengambil data informasi toko.",
+        };
+      }
+    },
+    [CACHE_TAG.COMMON_INFORMATION],
+    {
+      revalidate: 60 * 60 * 24 * 1,
+      tags: [CACHE_TAG.COMMON_INFORMATION],
+    },
+  );
 
 export async function upsertCommonInformation(
   input: UpsertCommonInformationInput,
@@ -60,10 +85,15 @@ export async function upsertCommonInformation(
       input.unitFeePercentage < 0 ||
       input.unitFeePercentage > 100
     ) {
-      return { success: false, error: "Persentase fee unit harus di antara 0 sampai 100." };
+      return {
+        success: false,
+        error: "Persentase fee unit harus di antara 0 sampai 100.",
+      };
     }
 
-    const normalizedLogo = input.storeLogo?.trim() ? input.storeLogo.trim() : null;
+    const normalizedLogo = input.storeLogo?.trim()
+      ? input.storeLogo.trim()
+      : null;
     const normalizedFootNote = input.footNoteReceipt?.trim()
       ? input.footNoteReceipt.trim()
       : null;
