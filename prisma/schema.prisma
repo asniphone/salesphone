@@ -27,6 +27,7 @@ model User {
   sendInvoiceHistories SendInvoiceHistory[]
   cashflowLogs         CashflowLog[]
   otps                 OTP[]
+  imbursementLogs      ImbursementLog[]
 
   // access
   isSuperAdmin               Boolean
@@ -74,6 +75,11 @@ model User {
   accessCashflowCreate       Boolean @default(false)
   accessCashflowUpdate       Boolean @default(false)
   accessCashflowDelete       Boolean @default(false)
+  // access imbursement
+  accessImbursementRead      Boolean @default(false)
+  accessImbursementCreate    Boolean @default(false)
+  accessImbursementUpdate    Boolean @default(false)
+  accessImbursementDelete    Boolean @default(false)
 }
 
 model Unit {
@@ -371,10 +377,13 @@ model Worker {
   isActive Boolean @default(true)
   units    Unit[]
 
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  deletedAt      DateTime?
-  accessorySales AccessorySale[]
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
+  deletedAt                   DateTime?
+  accessorySales              AccessorySale[]
+  imbursements                Imbursement[]
+  imbursementLogsWorkerBefore ImbursementLog[] @relation("WorkerBefore")
+  imbursementLogsWorkerAfter  ImbursementLog[] @relation("WorkerAfter")
 }
 
 // expected 1 row, if none return default values each field
@@ -473,3 +482,54 @@ model OTP {
 // - can be resend after 1 minute
 // - must send via whatsapp
 // - use for reset password 
+
+model Imbursement {
+  id Int @id @default(autoincrement())
+
+  amount Int
+  note   String @db.Text()
+
+  workerId Int
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+  imbursementLogs ImbursementLog[]
+}
+
+model ImbursementLog {
+  id Int @id @default(autoincrement())
+
+  imbursementId Int
+  imbursement   Imbursement @relation(fields: [imbursementId], references: [id], onDelete: Cascade)
+
+  logType LogType
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amountBefore Int?
+  amountAfter  Int?
+
+  noteBefore String? @db.Text()
+  noteAfter  String? @db.Text()
+
+  workerIdBefore Int?
+  workerIdAfter  Int?
+
+  workerBefore Worker? @relation("WorkerBefore", fields: [workerIdBefore], references: [id], onDelete: Cascade)
+  workerAfter  Worker? @relation("WorkerAfter", fields: [workerIdAfter], references: [id], onDelete: Cascade)
+
+  logActionNote String? @db.Text()
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+enum ImbursementLogType {
+  CREATE
+  UPDATE
+  DELETE
+}

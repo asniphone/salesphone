@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { Prisma } from "@prisma/client";
 import { FONNTE_TOKEN } from "@/constants/env";
+import { revalidateTag } from "next/cache";
+import { CACHE_TAG } from "@/constants/cache-tag";
 
 export type ActionResult<T = void> = {
   success: boolean;
@@ -180,6 +182,107 @@ Jika ada pertanyaan lebih lanjut, silakan balas pesan ini. Semoga hari Anda meny
   } catch (error) {
     console.error("sendUnitInvoiceWhatsApp error:", error);
     return { success: false, error: "Terjadi kesalahan saat mengirim invoice unit." };
+  }
+}
+
+export async function sendUnitWorkerReceiptWhatsApp(unitId: number): Promise<ActionResult> {
+  try {
+    const userId = await requireUserId();
+    const storeInformation = await getInvoiceStoreInformation();
+
+    const unit = await prisma.unit.findUnique({
+      where: { id: unitId },
+      include: {
+        customer: true,
+        worker: true,
+      },
+    });
+
+    if (!unit) return { success: false, error: "Unit tidak ditemukan." };
+    if (unit.status !== "SOLD") {
+      return {
+        success: false,
+        error: "Hanya unit dengan status SOLD yang dapat dikirimkan receipt worker.",
+      };
+    }
+    if (!unit.worker) return { success: false, error: "Unit ini belum dikaitkan dengan worker." };
+    if (!unit.worker.phone) return { success: false, error: "Worker tidak memiliki nomor telepon." };
+
+    const soldPrice = unit.soldPrice ?? 0;
+    const buyPrice = unit.buyPrice ?? 0;
+    const workerFee = unit.workerFee ?? 0;
+    const grossProfit = soldPrice - buyPrice;
+    const netProfit = grossProfit - workerFee;
+    const dateStr = unit.soldAt
+      ? new Intl.DateTimeFormat("id-ID", {
+          dateStyle: "long",
+          timeStyle: "short",
+        }).format(unit.soldAt)
+      : "-";
+
+    const message = `Halo *${unit.worker.name}*,
+
+Berikut adalah detail unit yang berhasil Anda jual:
+
+*RECEIPT PENJUALAN WORKER*
+ID Unit: #${unit.id}
+━━━━━━━━━━━━━━━━━━━━━━
+• Toko: *${storeInformation.storeName}*
+• Telepon: ${storeInformation.storePhone}
+━━━━━━━━━━━━━━━━━━━━━━
+• Unit: ${unit.name}
+${unit.imei ? `• IMEI: ${unit.imei}` : ""}
+• Tanggal Terjual: ${dateStr}
+${unit.customer ? `• Customer: ${unit.customer.name}` : ""}
+• Tipe Pembayaran: ${unit.paymentType ?? "-"}
+━━━━━━━━━━━━━━━━━━━━━━
+• Harga Beli: ${formatCurrency(buyPrice)}
+• Harga Jual: *${formatCurrency(soldPrice)}*
+• Laba Kotor: ${formatCurrency(grossProfit)}
+• Fee Worker: *${formatCurrency(workerFee)}*
+• Laba Bersih: ${formatCurrency(netProfit)}
+━━━━━━━━━━━━━━━━━━━━━━
+
+Fee di atas adalah fee tertulis. Pencairan resmi tetap dicatat melalui menu Pencairan Fee.`;
+
+    const sent = await sendFonnteMessage([unit.worker.phone], message);
+
+    await prisma.unitLog.create({
+      data: {
+        type: "UPDATE",
+        unitId: unit.id,
+        userId,
+        statusBefore: unit.status,
+        statusAfter: unit.status,
+        buyPriceBefore: unit.buyPrice,
+        buyPriceAfter: unit.buyPrice,
+        soldPriceBefore: unit.soldPrice,
+        soldPriceAfter: unit.soldPrice,
+        dpAmountBefore: unit.dpAmount,
+        dpAmountAfter: unit.dpAmount,
+        customerIdBefore: unit.customerId,
+        customerIdAfter: unit.customerId,
+        noteBefore: unit.note,
+        noteAfter: unit.note,
+        logActionNote: sent
+          ? "Receipt worker dikirim via WhatsApp"
+          : "Gagal mengirim receipt worker via WhatsApp",
+      },
+    });
+
+    revalidateTag(CACHE_TAG.UNIT_LOG);
+
+    if (!sent) {
+      return {
+        success: false,
+        error: "Gagal mengirim pesan melalui Fonnte. Periksa token atau nomor tujuan.",
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("sendUnitWorkerReceiptWhatsApp error:", error);
+    return { success: false, error: "Terjadi kesalahan saat mengirim receipt worker." };
   }
 }
 

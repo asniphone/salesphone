@@ -10,11 +10,11 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [userAccess, rawCommonInformation] = await Promise.all([
+  const [userAccess, commonInformationResult] = await Promise.all([
     getCurrentUserAccess(),
     getCommonInformation(),
   ]);
-  const commonInformation = (await rawCommonInformation()).data;
+  const commonInformation = commonInformationResult.data;
   if (!userAccess) {
     redirect("/login");
   }
@@ -28,4 +28,3 @@ export default async function DashboardLayout({
     </TooltipProvider>
   );
 }
-

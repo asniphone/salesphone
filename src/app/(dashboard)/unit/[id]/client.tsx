@@ -3,10 +3,14 @@
 import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateUnit, deleteUnit } from "@/actions/unit";
-import { sendUnitInvoiceWhatsApp } from "@/actions/message";
+import {
+  sendUnitInvoiceWhatsApp,
+  sendUnitWorkerReceiptWhatsApp,
+} from "@/actions/message";
 import { createCustomer } from "@/actions/customer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -146,9 +150,13 @@ export function UnitDetailClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+  const [isSendingWorkerReceipt, setIsSendingWorkerReceipt] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Status | "">("");
+  const [sendCustomerInvoiceOnSold, setSendCustomerInvoiceOnSold] =
+    useState(false);
+  const [sendWorkerReceiptOnSold, setSendWorkerReceiptOnSold] = useState(false);
 
   // Edit fields
   const [name, setName] = useState(unit.name);
@@ -230,6 +238,10 @@ export function UnitDetailClient({
     if (!selectedStatus) return;
 
     startTransition(async () => {
+      const shouldSendCustomerInvoice =
+        selectedStatus === "SOLD" && sendCustomerInvoiceOnSold;
+      const shouldSendWorkerReceipt =
+        selectedStatus === "SOLD" && sendWorkerReceiptOnSold;
       const data: {
         id: number;
         status: Status;
@@ -277,6 +289,31 @@ export function UnitDetailClient({
       const result = await updateUnit(data);
       if (result.success) {
         toast.success(`Status berhasil diubah ke ${UNIT_STATUS_CONFIG[selectedStatus as Status].label}.`);
+
+        if (shouldSendCustomerInvoice) {
+          const invoiceResult = await sendUnitInvoiceWhatsApp(unit.id);
+          if (invoiceResult.success) {
+            toast.success("Invoice customer berhasil dikirim via WhatsApp.");
+          } else {
+            toast.error(
+              invoiceResult.error ??
+                "Status berhasil, namun invoice customer gagal dikirim.",
+            );
+          }
+        }
+
+        if (shouldSendWorkerReceipt) {
+          const receiptResult = await sendUnitWorkerReceiptWhatsApp(unit.id);
+          if (receiptResult.success) {
+            toast.success("Receipt worker berhasil dikirim via WhatsApp.");
+          } else {
+            toast.error(
+              receiptResult.error ??
+                "Status berhasil, namun receipt worker gagal dikirim.",
+            );
+          }
+        }
+
         setStatusDialogOpen(false);
         router.refresh();
       } else {
@@ -301,6 +338,8 @@ export function UnitDetailClient({
     setSelectedStatus(status);
     if (status === "SOLD") {
       setPaymentType(unit.paymentType ?? "CASH");
+      setSendCustomerInvoiceOnSold(false);
+      setSendWorkerReceiptOnSold(false);
     }
     setShowNewCustomerForm(false);
     setNewCustomerName("");
@@ -348,6 +387,19 @@ export function UnitDetailClient({
     });
   }
 
+  function handleSendWorkerReceipt() {
+    setIsSendingWorkerReceipt(true);
+    startTransition(async () => {
+      const result = await sendUnitWorkerReceiptWhatsApp(unit.id);
+      setIsSendingWorkerReceipt(false);
+      if (result.success) {
+        toast.success("Receipt worker berhasil dikirim.");
+      } else {
+        toast.error(result.error ?? "Gagal mengirim receipt worker.");
+      }
+    });
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -374,7 +426,18 @@ export function UnitDetailClient({
               disabled={isSendingInvoice}
             >
               <MessageSquare className="mr-1 h-3 w-3" />
-              {isSendingInvoice ? "Mengirim..." : "Kirim Invoice WA"}
+              {isSendingInvoice ? "Mengirim..." : "Invoice Customer"}
+            </Button>
+          )}
+          {unit.status === "SOLD" && unit.workerId && userAccess.accessUnitUpdate && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSendWorkerReceipt}
+              disabled={isSendingWorkerReceipt}
+            >
+              <MessageSquare className="mr-1 h-3 w-3" />
+              {isSendingWorkerReceipt ? "Mengirim..." : "Receipt Worker"}
             </Button>
           )}
           {userAccess.accessUnitUpdate && (
@@ -716,6 +779,57 @@ export function UnitDetailClient({
                     Otomatis {unitFeePercentage}% dari laba
                     {unit.buyPrice != null ? ` (harga jual - ${formatCurrency(unit.buyPrice)})` : ""}.
                   </p>
+                </div>
+                <Separator />
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Pengiriman WhatsApp</p>
+                    <p className="text-xs text-muted-foreground">
+                      Opsional. Pesan dikirim setelah status SOLD berhasil
+                      disimpan.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="sendCustomerInvoiceOnSold"
+                      checked={sendCustomerInvoiceOnSold}
+                      onCheckedChange={(checked) =>
+                        setSendCustomerInvoiceOnSold(checked === true)
+                      }
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <Label
+                        htmlFor="sendCustomerInvoiceOnSold"
+                        className="text-sm font-normal"
+                      >
+                        Kirim invoice ke customer
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Membutuhkan nomor WhatsApp pada data customer.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="sendWorkerReceiptOnSold"
+                      checked={sendWorkerReceiptOnSold}
+                      onCheckedChange={(checked) =>
+                        setSendWorkerReceiptOnSold(checked === true)
+                      }
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <Label
+                        htmlFor="sendWorkerReceiptOnSold"
+                        className="text-sm font-normal"
+                      >
+                        Kirim receipt ke worker
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Berisi detail unit, harga jual, laba, fee worker, dan
+                        catatan bahwa pencairan tetap melalui Pencairan Fee.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </>
             )}

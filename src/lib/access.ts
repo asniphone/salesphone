@@ -55,6 +55,11 @@ export interface UserAccess {
   accessCashflowCreate: boolean;
   accessCashflowUpdate: boolean;
   accessCashflowDelete: boolean;
+  // imbursement
+  accessImbursementRead: boolean;
+  accessImbursementCreate: boolean;
+  accessImbursementUpdate: boolean;
+  accessImbursementDelete: boolean;
 }
 
 // ============================================================
@@ -127,6 +132,11 @@ export const getCurrentUserAccess = cache(
       accessCashflowCreate: sa || user.accessCashflowCreate,
       accessCashflowUpdate: sa || user.accessCashflowUpdate,
       accessCashflowDelete: sa || user.accessCashflowDelete,
+
+      accessImbursementRead: sa || user.accessImbursementRead,
+      accessImbursementCreate: sa || user.accessImbursementCreate,
+      accessImbursementUpdate: sa || user.accessImbursementUpdate,
+      accessImbursementDelete: sa || user.accessImbursementDelete,
     };
   },
 );

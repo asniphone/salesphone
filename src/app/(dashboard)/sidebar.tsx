@@ -31,6 +31,7 @@ import {
   HardHat,
   Store,
   Wallet,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 import { logout } from "@/actions/auth";
@@ -117,6 +118,11 @@ export function DashboardSidebar({ userAccess, commonInformation }: DashboardSid
   // Cashflow
   if (userAccess.accessCashflowRead) {
     menuItems.push({ title: "Arus Kas Operasional", url: "/cashflow", icon: Wallet });
+  }
+
+  // Imbursement
+  if (userAccess.accessImbursementRead) {
+    menuItems.push({ title: "Pencairan Fee", url: "/imbursement", icon: HandCoins });
   }
 
   return (

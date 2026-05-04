@@ -89,6 +89,15 @@ export const ACCESS_GROUPS = [
       { key: "accessCashflowDelete", label: "Hapus" },
     ],
   },
+  {
+    label: "Pencairan Fee Worker",
+    permissions: [
+      { key: "accessImbursementRead", label: "Lihat" },
+      { key: "accessImbursementCreate", label: "Tambah" },
+      { key: "accessImbursementUpdate", label: "Edit" },
+      { key: "accessImbursementDelete", label: "Hapus" },
+    ],
+  },
 ] as const;
 
 export type AccessPermissionKey = (typeof ACCESS_GROUPS)[number]["permissions"][number]["key"];

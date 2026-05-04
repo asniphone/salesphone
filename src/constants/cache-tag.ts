@@ -12,6 +12,8 @@ export const CACHE_TAG = {
   COMMON_INFORMATION: "common-information",
   CASHFLOW: "cashflow",
   CASHFLOW_LOG: "cashflow-log",
+  IMBURSEMENT: "imbursement",
+  IMBURSEMENT_LOG: "imbursement-log",
 } as const;
 
 export type CacheTag = (typeof CACHE_TAG)[keyof typeof CACHE_TAG];
