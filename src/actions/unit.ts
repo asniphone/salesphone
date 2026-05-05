@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidateTag } from "next/cache";
 import { CACHE_TAG } from "@/constants/cache-tag";
 import { getSession } from "@/lib/session";
+import { insertLedgerRow } from "./ledger";
 import type { PaymentType, Prisma, Status } from "@prisma/client";
 
 // ============================================================
@@ -241,6 +242,17 @@ export async function createUnit(
         },
       });
 
+      if (input.buyPrice) {
+        await insertLedgerRow(tx, {
+          actionType: "CREATE",
+          referenceType: "UNIT_PURCHASE",
+          referenceId: created.id,
+          gapAmount: -input.buyPrice,
+          actionNote: `Pembelian Unit ${input.name} (IMEI: ${input.imei || "Tidak ada"})`,
+          transactionDate: input.buyAt || new Date(),
+        });
+      }
+
       return created;
     });
 
@@ -365,6 +377,60 @@ export async function updateUnit(
           logActionNote: logNote,
         },
       });
+
+      // LEDGER UPDATES FOR UNIT_PURCHASE
+      if (data.buyPrice !== undefined && data.buyPrice !== before.buyPrice) {
+        const oldBuyPrice = before.buyPrice || 0;
+        const newBuyPrice = data.buyPrice || 0;
+        await insertLedgerRow(tx, {
+          actionType: "UPDATE",
+          referenceType: "UNIT_PURCHASE",
+          referenceId: id,
+          gapAmount: -(newBuyPrice - oldBuyPrice),
+          actionNote: `Edit Harga Beli Unit ${after.name} (IMEI: ${after.imei || "Tidak ada"})`,
+          transactionDate: after.buyAt || new Date(),
+        });
+      }
+
+      // LEDGER UPDATES FOR UNIT_SALE
+      const getEffectiveSoldPrice = (sp: number | null, dp: number | null) => sp ? sp : (dp || 0);
+
+      const oldEffectivePrice = getEffectiveSoldPrice(before.soldPrice, before.dpAmount);
+      const newEffectivePrice = getEffectiveSoldPrice(after.soldPrice, after.dpAmount);
+
+      if (before.status !== "SOLD" && after.status === "SOLD") {
+        // Sold!
+        await insertLedgerRow(tx, {
+          actionType: "CREATE",
+          referenceType: "UNIT_SALE",
+          referenceId: id,
+          gapAmount: +newEffectivePrice,
+          actionNote: `Penjualan Unit ${after.name} (IMEI: ${after.imei || "Tidak ada"})`,
+          transactionDate: after.soldAt || new Date(),
+        });
+      } else if (before.status === "SOLD" && after.status !== "SOLD") {
+        // Unsold / Returned
+        await insertLedgerRow(tx, {
+          actionType: "DELETE",
+          referenceType: "UNIT_SALE",
+          referenceId: id,
+          gapAmount: -oldEffectivePrice,
+          actionNote: `Batal Jual Unit ${after.name} (IMEI: ${after.imei || "Tidak ada"})`,
+          transactionDate: before.soldAt || new Date(),
+        });
+      } else if (before.status === "SOLD" && after.status === "SOLD") {
+        // Price changed while sold
+        if (oldEffectivePrice !== newEffectivePrice) {
+          await insertLedgerRow(tx, {
+            actionType: "UPDATE",
+            referenceType: "UNIT_SALE",
+            referenceId: id,
+            gapAmount: +(newEffectivePrice - oldEffectivePrice),
+            actionNote: `Edit Harga Jual Unit ${after.name} (IMEI: ${after.imei || "Tidak ada"})`,
+            transactionDate: after.soldAt || new Date(),
+          });
+        }
+      }
 
       return after;
     });

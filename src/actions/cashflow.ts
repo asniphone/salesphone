@@ -5,6 +5,7 @@ import { revalidateTag } from "next/cache";
 import { CACHE_TAG } from "@/constants/cache-tag";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { insertLedgerRow } from "./ledger";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -318,6 +319,15 @@ export async function createCashflow(
         },
       });
 
+      await insertLedgerRow(tx, {
+        actionType: "CREATE",
+        referenceType: "CASHFLOW",
+        referenceId: created.id,
+        gapAmount: input.type === "INCOME" ? input.amount : -input.amount,
+        actionNote: `Cashflow ${input.type === "INCOME" ? "Masuk" : "Keluar"}: ${input.note}`,
+        transactionDate: input.transactionDate,
+      });
+
       return created;
     });
 
@@ -392,6 +402,20 @@ export async function updateCashflow(
         },
       });
 
+      const oldGap = existing.type === "INCOME" ? existing.amount : -existing.amount;
+      const newGap = input.type === "INCOME" ? input.amount : -input.amount;
+
+      if (oldGap !== newGap) {
+        await insertLedgerRow(tx, {
+          actionType: "UPDATE",
+          referenceType: "CASHFLOW",
+          referenceId: updated.id,
+          gapAmount: newGap - oldGap,
+          actionNote: `Edit Cashflow ${input.type === "INCOME" ? "Masuk" : "Keluar"}: ${input.note}`,
+          transactionDate: input.transactionDate,
+        });
+      }
+
       return updated;
     });
 
@@ -449,6 +473,16 @@ export async function deleteCashflow(
           deletedAt: new Date(),
         },
       });
+
+      await insertLedgerRow(tx, {
+        actionType: "DELETE",
+        referenceType: "CASHFLOW",
+        referenceId: existing.id,
+        gapAmount: existing.type === "INCOME" ? -existing.amount : existing.amount,
+        actionNote: `Hapus Cashflow ${existing.type === "INCOME" ? "Masuk" : "Keluar"}: ${existing.note}`,
+        transactionDate: existing.transactionDate,
+      });
+
     });
 
     revalidateTag(CACHE_TAG.CASHFLOW);

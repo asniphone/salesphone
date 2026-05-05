@@ -5,6 +5,7 @@ import { revalidateTag } from "next/cache";
 import { CACHE_TAG } from "@/constants/cache-tag";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { insertLedgerRow } from "./ledger";
 
 interface ActionResult<T = undefined> {
   success: boolean;
@@ -496,6 +497,15 @@ export async function createImbursement(
         },
       });
 
+      await insertLedgerRow(tx, {
+        actionType: "CREATE",
+        referenceType: "IMBURSEMENT",
+        referenceId: created.id,
+        gapAmount: -input.amount,
+        actionNote: `Kasbon / Imbursement Worker ${worker.name}: ${input.note}`,
+        transactionDate: new Date(),
+      });
+
       return created;
     });
 
@@ -596,6 +606,17 @@ export async function updateImbursement(
         },
       });
 
+      if (existing.amount !== input.amount || existing.workerId !== input.workerId) {
+        await insertLedgerRow(tx, {
+          actionType: "UPDATE",
+          referenceType: "IMBURSEMENT",
+          referenceId: updated.id,
+          gapAmount: -(input.amount - existing.amount),
+          actionNote: `Edit Kasbon / Imbursement Worker ${worker.name}: ${input.note}`,
+          transactionDate: existing.createdAt,
+        });
+      }
+
       return updated;
     });
 
@@ -660,6 +681,18 @@ export async function deleteImbursement(
           deletedAt: new Date(),
         },
       });
+
+      const worker = await tx.worker.findFirst({ where: { id: existing.workerId } });
+
+      await insertLedgerRow(tx, {
+        actionType: "DELETE",
+        referenceType: "IMBURSEMENT",
+        referenceId: existing.id,
+        gapAmount: +existing.amount,
+        actionNote: `Hapus Kasbon / Imbursement Worker ${worker?.name || "Unknown"}`,
+        transactionDate: existing.createdAt,
+      });
+
     });
 
     revalidateTag(CACHE_TAG.IMBURSEMENT);

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidateTag } from "next/cache";
 import { CACHE_TAG } from "@/constants/cache-tag";
 import { getSession } from "@/lib/session";
+import { insertLedgerRow } from "./ledger";
 import type { Prisma } from "@prisma/client";
 
 // ============================================================
@@ -387,6 +388,15 @@ export async function addAccessoryPurchase(
           logNote: `Pembelian ${input.quantity} unit @${input.buyPricePerUnit}${input.note ? ` — ${input.note}` : ""}`,
         },
       });
+
+      await insertLedgerRow(tx, {
+        actionType: "CREATE",
+        referenceType: "ACCESSORY_PURCHASE",
+        referenceId: purchase.id,
+        gapAmount: -(input.quantity * input.buyPricePerUnit),
+        actionNote: `Pembelian Aksesoris ${accessory.name} (${input.quantity} unit @${input.buyPricePerUnit})${input.note ? ` — ${input.note}` : ""}`,
+        transactionDate: new Date(),
+      });
     });
 
     revalidateTag(CACHE_TAG.ACCESSORY);
@@ -524,6 +534,15 @@ export async function updateAccessoryPurchase(
           logNote: `Edit pembelian: ${oldPurchase.quantity} unit → ${input.quantity} unit, @${oldPurchase.buyPricePerUnit} → @${input.buyPricePerUnit}`,
         },
       });
+
+      await insertLedgerRow(tx, {
+        actionType: "UPDATE",
+        referenceType: "ACCESSORY_PURCHASE",
+        referenceId: oldPurchase.id,
+        gapAmount: -(input.quantity * input.buyPricePerUnit - oldPurchase.buyPriceTotal),
+        actionNote: `Edit Pembelian Aksesoris ${accessory.name} #${oldPurchase.id}`,
+        transactionDate: oldPurchase.createdAt,
+      });
     });
 
     revalidateTag(CACHE_TAG.ACCESSORY);
@@ -609,6 +628,15 @@ export async function deleteAccessoryPurchase(
           afterRecordedBuyPrice: newMAC,
           logNote: `Hapus pembelian: ${purchase.quantity} unit @${purchase.buyPricePerUnit}`,
         },
+      });
+
+      await insertLedgerRow(tx, {
+        actionType: "DELETE",
+        referenceType: "ACCESSORY_PURCHASE",
+        referenceId: purchase.id,
+        gapAmount: +purchase.buyPriceTotal,
+        actionNote: `Hapus Pembelian Aksesoris ${accessory.name} #${purchase.id}`,
+        transactionDate: purchase.createdAt,
       });
     });
 
@@ -968,6 +996,15 @@ export async function createAccessorySale(
         data: { totalPrice, totalProfit },
       });
 
+      await insertLedgerRow(tx, {
+        actionType: "CREATE",
+        referenceType: "ACCESSORY_SALE",
+        referenceId: sale.id,
+        gapAmount: +totalPrice,
+        actionNote: `Penjualan Aksesoris #${sale.id} kepada ${customer.name}`,
+        transactionDate: new Date(),
+      });
+
       return { id: sale.id, totalPrice, totalProfit };
     });
 
@@ -1302,6 +1339,17 @@ export async function updateAccessorySale(
           },
         });
       }
+
+      if (nextTotalPrice !== sale.totalPrice) {
+        await insertLedgerRow(tx, {
+          actionType: "UPDATE",
+          referenceType: "ACCESSORY_SALE",
+          referenceId: sale.id,
+          gapAmount: +(nextTotalPrice - sale.totalPrice),
+          actionNote: `Edit Penjualan Aksesoris #${sale.id}`,
+          transactionDate: sale.createdAt,
+        });
+      }
     });
 
     revalidateTag(CACHE_TAG.ACCESSORY);
@@ -1382,6 +1430,15 @@ export async function deleteAccessorySale(
           },
         });
       }
+
+      await insertLedgerRow(tx, {
+        actionType: "DELETE",
+        referenceType: "ACCESSORY_SALE",
+        referenceId: sale.id,
+        gapAmount: -sale.totalPrice,
+        actionNote: `Hapus Penjualan Aksesoris #${sale.id}`,
+        transactionDate: sale.createdAt,
+      });
     });
 
     revalidateTag(CACHE_TAG.ACCESSORY);
