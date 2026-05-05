@@ -7,7 +7,10 @@ import {
   updateAccessorySale,
   type AccessorySaleHistoryData,
 } from "@/actions/accessory";
-import { sendAccessorySaleInvoiceWhatsApp } from "@/actions/message";
+import {
+  sendAccessorySaleInvoiceWhatsApp,
+  sendAccessorySaleWorkerInvoiceWhatsApp,
+} from "@/actions/message";
 import type { WorkerData } from "@/actions/worker";
 import type { Customer } from "@prisma/client";
 import { toast } from "sonner";
@@ -104,13 +107,16 @@ export function AccessoryHistorySellClient({
   const [customerId, setCustomerId] = useState("");
   const [workerId, setWorkerId] = useState("");
   const [feeWorker, setFeeWorker] = useState("");
+  const [discount, setDiscount] = useState("");
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+  const [isSendingWorkerInvoice, setIsSendingWorkerInvoice] = useState(false);
 
   function openEditDialog(sale: AccessorySaleHistoryData) {
     setEditingSale(sale);
     setCustomerId(sale.customerId.toString());
     setWorkerId(sale.workerId.toString());
     setFeeWorker(sale.feeWorker.toString());
+    setDiscount(sale.discount.toString());
   }
 
   function handleSendInvoice(saleId: number) {
@@ -122,6 +128,19 @@ export function AccessoryHistorySellClient({
         toast.success("Invoice WhatsApp berhasil dikirim.");
       } else {
         toast.error(result.error ?? "Gagal mengirim invoice.");
+      }
+    });
+  }
+
+  function handleSendWorkerInvoice(saleId: number) {
+    setIsSendingWorkerInvoice(true);
+    startTransition(async () => {
+      const result = await sendAccessorySaleWorkerInvoiceWhatsApp(saleId);
+      setIsSendingWorkerInvoice(false);
+      if (result.success) {
+        toast.success("Invoice worker WhatsApp berhasil dikirim.");
+      } else {
+        toast.error(result.error ?? "Gagal mengirim invoice worker.");
       }
     });
   }
@@ -142,11 +161,26 @@ export function AccessoryHistorySellClient({
       toast.error("Fee worker wajib diisi dengan angka 0 atau lebih.");
       return;
     }
+    const parsedDiscount = parseInt(discount, 10);
+    if (Number.isNaN(parsedDiscount) || parsedDiscount < 0) {
+      toast.error("Diskon wajib diisi dengan angka 0 atau lebih.");
+      return;
+    }
+
+    const subtotal = editingSale.items.reduce(
+      (sum, item) => sum + item.sellPricePerUnit * item.quantity,
+      0,
+    );
+    if (parsedDiscount > subtotal) {
+      toast.error("Diskon tidak boleh melebihi subtotal belanja.");
+      return;
+    }
 
     if (
       customerId === editingSale.customerId.toString() &&
       workerId === editingSale.workerId.toString() &&
-      parsedFeeWorker === editingSale.feeWorker
+      parsedFeeWorker === editingSale.feeWorker &&
+      parsedDiscount === editingSale.discount
     ) {
       toast.info("Tidak ada perubahan.");
       return;
@@ -158,6 +192,7 @@ export function AccessoryHistorySellClient({
         customerId: parseInt(customerId, 10),
         workerId: parseInt(workerId, 10),
         feeWorker: parsedFeeWorker,
+        discount: parsedDiscount,
       });
 
       if (result.success) {
@@ -313,6 +348,17 @@ export function AccessoryHistorySellClient({
                       {isSendingInvoice ? "Mengirim..." : "Kirim Invoice WA"}
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSendWorkerInvoice(detailSale.id)}
+                    disabled={isSendingWorkerInvoice}
+                  >
+                    <MessageSquare className="mr-1 h-4 w-4" />
+                    {isSendingWorkerInvoice
+                      ? "Mengirim..."
+                      : "Kirim Invoice Worker"}
+                  </Button>
                   <AccessoryReceiptPrintButton
                     sale={detailSale}
                     storeInformation={storeInformation}
@@ -345,6 +391,10 @@ export function AccessoryHistorySellClient({
                 <div className="rounded-lg border p-4">
                   <p className="text-xs text-muted-foreground">Fee Worker</p>
                   <p className="font-medium">{formatCurrency(detailSale.feeWorker)}</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-xs text-muted-foreground">Diskon</p>
+                  <p className="font-medium">{formatCurrency(detailSale.discount)}</p>
                 </div>
               </div>
 
@@ -391,6 +441,23 @@ export function AccessoryHistorySellClient({
               </div>
 
               <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">
+                    {formatCurrency(
+                      detailSale.items.reduce(
+                        (sum, item) => sum + item.sellPricePerUnit * item.quantity,
+                        0,
+                      ),
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Diskon</span>
+                  <span className="font-medium">
+                    - {formatCurrency(detailSale.discount)}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Total Harga</span>
                   <span className="font-medium">{formatCurrency(detailSale.totalPrice)}</span>
@@ -459,6 +526,37 @@ export function AccessoryHistorySellClient({
                 onChange={(e) => setFeeWorker(e.target.value)}
                 placeholder="0"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Diskon (Rp)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                placeholder="0"
+              />
+              {editingSale && (
+                <p className="text-xs text-muted-foreground">
+                  Subtotal{" "}
+                  {formatCurrency(
+                    editingSale.items.reduce(
+                      (sum, item) => sum + item.sellPricePerUnit * item.quantity,
+                      0,
+                    ),
+                  )}{" "}
+                  - Diskon {formatCurrency(Number.parseInt(discount || "0", 10) || 0)} ={" "}
+                  {formatCurrency(
+                    Math.max(
+                      editingSale.items.reduce(
+                        (sum, item) => sum + item.sellPricePerUnit * item.quantity,
+                        0,
+                      ) - (Number.parseInt(discount || "0", 10) || 0),
+                      0,
+                    ),
+                  )}
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>

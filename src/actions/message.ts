@@ -315,7 +315,9 @@ export async function sendAccessorySaleInvoiceWhatsApp(saleId: number): Promise<
     const footNote = storeInformation.footNoteReceipt?.trim();
 
     let itemsStr = "";
+    let subtotal = 0;
     for (const item of sale.items) {
+      subtotal += item.sellPricePerUnit * item.quantity;
       itemsStr += `• ${item.accessory.name}\n  ${item.quantity} x ${formatCurrency(item.sellPricePerUnit)}\n`;
     }
 
@@ -333,6 +335,8 @@ Tanggal: ${dateStr}
 ━━━━━━━━━━━━━━━━━━━━━━
 ${itemsStr}
 ━━━━━━━━━━━━━━━━━━━━━━
+• Subtotal: ${formatCurrency(subtotal)}
+• Diskon: ${formatCurrency(sale.discount)}
 *Total Harga: ${formatCurrency(sale.totalPrice)}*${footNote ? `
 
 Catatan:
@@ -359,6 +363,88 @@ Terima kasih atas kepercayaannya. Semoga hari Anda menyenangkan!`;
   } catch (error) {
     console.error("sendAccessorySaleInvoiceWhatsApp error:", error);
     return { success: false, error: "Terjadi kesalahan saat mengirim invoice aksesoris." };
+  }
+}
+
+export async function sendAccessorySaleWorkerInvoiceWhatsApp(
+  saleId: number,
+): Promise<ActionResult> {
+  try {
+    const sale = await prisma.accessorySale.findUnique({
+      where: { id: saleId },
+      include: {
+        customer: true,
+        worker: true,
+        items: {
+          include: { accessory: true },
+        },
+      },
+    });
+
+    if (!sale) {
+      return {
+        success: false,
+        error: "Data penjualan aksesoris tidak ditemukan.",
+      };
+    }
+    if (!sale.worker.phone) {
+      return { success: false, error: "Worker tidak memiliki nomor telepon." };
+    }
+
+    const storeInformation = await getInvoiceStoreInformation();
+    const dateStr = new Intl.DateTimeFormat("id-ID", {
+      dateStyle: "long",
+      timeStyle: "short",
+    }).format(sale.createdAt);
+
+    let itemsStr = "";
+    let subtotal = 0;
+    for (const item of sale.items) {
+      const lineTotal = item.sellPricePerUnit * item.quantity;
+      subtotal += lineTotal;
+      itemsStr += `• ${item.accessory.name}\n  ${item.quantity} x ${formatCurrency(item.sellPricePerUnit)} = ${formatCurrency(lineTotal)}\n`;
+    }
+
+    const netAfterWorkerFee = sale.totalProfit - sale.feeWorker;
+
+    const message = `Halo *${sale.worker.name}*,
+
+Berikut detail transaksi aksesoris yang Anda tangani:
+
+*RECEIPT PENJUALAN AKSESORIS WORKER*
+ID Transaksi: #${sale.id}
+Tanggal: ${dateStr}
+━━━━━━━━━━━━━━━━━━━━━━
+• Toko: *${storeInformation.storeName}*
+• Telepon: ${storeInformation.storePhone}
+• Customer: ${sale.customer.name}
+━━━━━━━━━━━━━━━━━━━━━━
+${itemsStr}
+━━━━━━━━━━━━━━━━━━━━━━
+• Subtotal: ${formatCurrency(subtotal)}
+• Diskon: ${formatCurrency(sale.discount)}
+• Total Bayar: *${formatCurrency(sale.totalPrice)}*
+• Fee Worker (tertulis): *${formatCurrency(sale.feeWorker)}*
+• Estimasi Laba Bersih Toko: ${formatCurrency(netAfterWorkerFee)}
+━━━━━━━━━━━━━━━━━━━━━━
+
+Fee worker di atas adalah fee tertulis. Pencairan resmi tetap dicatat melalui menu Pencairan Fee.`;
+
+    const sent = await sendFonnteMessage([sale.worker.phone], message);
+    if (!sent) {
+      return {
+        success: false,
+        error: "Gagal mengirim pesan melalui Fonnte. Periksa token atau nomor tujuan.",
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("sendAccessorySaleWorkerInvoiceWhatsApp error:", error);
+    return {
+      success: false,
+      error: "Terjadi kesalahan saat mengirim invoice worker aksesoris.",
+    };
   }
 }
 

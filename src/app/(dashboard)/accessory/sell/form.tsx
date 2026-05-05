@@ -3,9 +3,12 @@
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAccessorySale } from "@/actions/accessory";
-import type { AccessoryForSale, AccessoryUnitForSale } from "@/actions/accessory";
+import type { AccessoryForSale } from "@/actions/accessory";
 import { createCustomer as createCustomerAction } from "@/actions/customer";
-import { sendAccessorySaleInvoiceWhatsApp } from "@/actions/message";
+import {
+  sendAccessorySaleInvoiceWhatsApp,
+  sendAccessorySaleWorkerInvoiceWhatsApp,
+} from "@/actions/message";
 import type { WorkerData } from "@/actions/worker";
 import type { Customer } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +18,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -83,16 +85,14 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [feeWorker, setFeeWorker] = useState("0");
+  const [discount, setDiscount] = useState("0");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [sendInvoiceToCustomer, setSendInvoiceToCustomer] = useState(false);
+  const [sendInvoiceToWorker, setSendInvoiceToWorker] = useState(false);
 
   const filteredAccessories = accessories.filter((acc) =>
     acc.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
-
-  // Check if a unit is already in any cart item
-  function isUnitInCart(unitId: number): boolean {
-    return cart.some((item) => item.selectedUnitIds.includes(unitId));
-  }
 
   // Toggle a single unit (with SN) selection
   function toggleUnit(accessory: AccessoryForSale, unitId: number) {
@@ -176,6 +176,13 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
       )
     );
   }, 0);
+  const parsedDiscount = Number.parseInt(discount, 10);
+  const effectiveDiscount =
+    Number.isNaN(parsedDiscount) || parsedDiscount < 0
+      ? 0
+      : Math.min(parsedDiscount, totalPrice);
+  const totalAfterDiscount = Math.max(totalPrice - effectiveDiscount, 0);
+  const profitAfterDiscount = totalProfit - effectiveDiscount;
 
   function handleCreateCustomer() {
     if (!newCustomerName.trim()) {
@@ -220,17 +227,28 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
       toast.error("Fee worker wajib diisi dengan angka 0 atau lebih.");
       return;
     }
+    const parsedDiscountValue = parseInt(discount, 10);
+    if (Number.isNaN(parsedDiscountValue) || parsedDiscountValue < 0) {
+      toast.error("Diskon wajib diisi dengan angka 0 atau lebih.");
+      return;
+    }
+    if (parsedDiscountValue > totalPrice) {
+      toast.error("Diskon tidak boleh melebihi subtotal belanja.");
+      return;
+    }
     setIsConfirmOpen(true);
   }
 
-  function processSale(sendInvoice: boolean) {
+  function processSale() {
     setIsConfirmOpen(false);
     startTransition(async () => {
       const parsedFeeWorker = parseInt(feeWorker, 10);
+      const parsedDiscountValue = parseInt(discount, 10);
       const result = await createAccessorySale({
         customerId: parseInt(selectedCustomerId, 10),
         workerId: parseInt(selectedWorkerId, 10),
         feeWorker: parsedFeeWorker,
+        discount: parsedDiscountValue,
         items: cart.map((item) => ({
           accessoryId: item.accessory.id,
           unitIds: item.selectedUnitIds,
@@ -241,12 +259,25 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
         toast.success(
           `Penjualan berhasil! Total: ${formatCurrency(result.data.totalPrice)}`,
         );
-        if (sendInvoice) {
+        if (sendInvoiceToCustomer) {
           const invoiceResult = await sendAccessorySaleInvoiceWhatsApp(result.data.id);
           if (invoiceResult.success) {
-            toast.success("Invoice WA berhasil dikirim!");
+            toast.success("Invoice customer WA berhasil dikirim.");
           } else {
-            toast.error(invoiceResult.error ?? "Penjualan berhasil, namun gagal mengirim Invoice WA.");
+            toast.error(invoiceResult.error ?? "Penjualan berhasil, namun gagal mengirim invoice customer.");
+          }
+        }
+        if (sendInvoiceToWorker) {
+          const invoiceWorkerResult = await sendAccessorySaleWorkerInvoiceWhatsApp(
+            result.data.id,
+          );
+          if (invoiceWorkerResult.success) {
+            toast.success("Invoice worker WA berhasil dikirim.");
+          } else {
+            toast.error(
+              invoiceWorkerResult.error ??
+                "Penjualan berhasil, namun gagal mengirim invoice worker.",
+            );
           }
         }
         router.push("/accessory");
@@ -550,6 +581,19 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
                 placeholder="0"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Diskon (Rp)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                Diskon akan mengurangi total bayar dan profit transaksi.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -634,17 +678,21 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
                     <span className="font-mono">{formatCurrency(totalPrice)}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Estimasi Profit</span>
+                    <span>Diskon</span>
+                    <span className="font-mono">- {formatCurrency(effectiveDiscount)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Estimasi Profit Setelah Diskon</span>
                     <span
-                      className={`font-mono ${totalProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}
+                      className={`font-mono ${profitAfterDiscount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}
                     >
-                      {formatCurrency(totalProfit)}
+                      {formatCurrency(profitAfterDiscount)}
                     </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-semibold text-base">
-                    <span>Total</span>
-                    <span className="font-mono">{formatCurrency(totalPrice)}</span>
+                    <span>Total Bayar</span>
+                    <span className="font-mono">{formatCurrency(totalAfterDiscount)}</span>
                   </div>
                 </div>
               </>
@@ -690,27 +738,46 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
             <AlertDialogTitle>Konfirmasi Penjualan</AlertDialogTitle>
             <AlertDialogDescription>
               Apakah Anda yakin ingin memproses penjualan ini? Total belanja pelanggan adalah{" "}
-              <strong>{formatCurrency(totalPrice)}</strong>.
+              <strong>{formatCurrency(totalAfterDiscount)}</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-3 px-1">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="sendInvoiceCustomer"
+                checked={sendInvoiceToCustomer}
+                onCheckedChange={(checked) => setSendInvoiceToCustomer(checked === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="sendInvoiceCustomer" className="font-normal">
+                  Kirim invoice ke customer
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Membutuhkan nomor WhatsApp customer.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="sendInvoiceWorker"
+                checked={sendInvoiceToWorker}
+                onCheckedChange={(checked) => setSendInvoiceToWorker(checked === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="sendInvoiceWorker" className="font-normal">
+                  Kirim invoice ke worker
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Berisi detail transaksi yang ditangani worker.
+                </p>
+              </div>
+            </div>
+          </div>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel disabled={isPending}>Batal</AlertDialogCancel>
-            <Button
-              variant="outline"
-              onClick={() => processSale(false)}
-              disabled={isPending}
-            >
-              {isPending ? "Memproses..." : "Proses Saja"}
+            <Button onClick={processSale} disabled={isPending}>
+              {isPending ? "Memproses..." : "Proses"}
             </Button>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                processSale(true);
-              }}
-              disabled={isPending}
-            >
-              {isPending ? "Memproses..." : "Proses & Kirim Invoice WA"}
-            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

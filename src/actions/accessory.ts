@@ -796,6 +796,7 @@ interface CreateAccessorySaleInput {
   customerId: number;
   workerId: number;
   feeWorker: number;
+  discount: number;
   items: SaleItem[];
 }
 
@@ -822,6 +823,9 @@ export async function createAccessorySale(
     }
     if (input.feeWorker < 0) {
       return { success: false, error: "Fee worker tidak boleh kurang dari 0." };
+    }
+    if (input.discount < 0) {
+      return { success: false, error: "Diskon tidak boleh kurang dari 0." };
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -862,8 +866,8 @@ export async function createAccessorySale(
       const accessoryMap = new Map(accessories.map((a) => [a.id, a]));
 
       // 3. Calculate totals and build sale items
-      let totalPrice = 0;
-      let totalProfit = 0;
+      let grossTotalPrice = 0;
+      let grossTotalProfit = 0;
 
       // 4. Create sale header
       // (totalPrice/totalProfit will be updated after processing items)
@@ -872,6 +876,7 @@ export async function createAccessorySale(
           customerId: input.customerId,
           workerId: input.workerId,
           feeWorker: input.feeWorker,
+          discount: input.discount,
           totalPrice: 0,
           totalProfit: 0,
         },
@@ -897,8 +902,8 @@ export async function createAccessorySale(
         const sellPricePerUnit = acc.sellPrice;
         const profitPerUnit = sellPricePerUnit - avgBuyPrice;
 
-        totalPrice += sellPricePerUnit * quantity;
-        totalProfit += profitPerUnit * quantity;
+        grossTotalPrice += sellPricePerUnit * quantity;
+        grossTotalProfit += profitPerUnit * quantity;
 
         // Create sale item
         const saleItem = await tx.accessorySaleItem.create({
@@ -945,10 +950,17 @@ export async function createAccessorySale(
             logNote:
               `Terjual ${quantity} unit @${sellPricePerUnit} ` +
               `(profit: ${profitPerUnit}/unit) ke ${customer.name} ` +
-              `oleh worker ${worker.name} (fee: ${input.feeWorker})`,
+              `oleh worker ${worker.name} (fee: ${input.feeWorker}, diskon: ${input.discount})`,
           },
         });
       }
+
+      if (input.discount > grossTotalPrice) {
+        throw new Error("Diskon tidak boleh melebihi subtotal belanja.");
+      }
+
+      const totalPrice = grossTotalPrice - input.discount;
+      const totalProfit = grossTotalProfit - input.discount;
 
       // Update sale totals
       await tx.accessorySale.update({
@@ -1096,6 +1108,7 @@ interface UpdateAccessorySaleInput {
   customerId: number;
   workerId: number;
   feeWorker: number;
+  discount: number;
 }
 
 export async function updateAccessorySale(
@@ -1112,6 +1125,9 @@ export async function updateAccessorySale(
     }
     if (input.feeWorker < 0) {
       return { success: false, error: "Fee worker tidak boleh kurang dari 0." };
+    }
+    if (input.discount < 0) {
+      return { success: false, error: "Diskon tidak boleh kurang dari 0." };
     }
 
     await prisma.$transaction(async (tx) => {
@@ -1137,12 +1153,31 @@ export async function updateAccessorySale(
         }),
       ]);
 
+      const grossTotalPrice = sale.items.reduce(
+        (sum, item) => sum + item.sellPricePerUnit * item.quantity,
+        0,
+      );
+      const grossTotalProfit = sale.items.reduce(
+        (sum, item) => sum + item.profitPerUnit * item.quantity,
+        0,
+      );
+
+      if (input.discount > grossTotalPrice) {
+        throw new Error("Diskon tidak boleh melebihi subtotal belanja.");
+      }
+
+      const nextTotalPrice = grossTotalPrice - input.discount;
+      const nextTotalProfit = grossTotalProfit - input.discount;
+
       await tx.accessorySale.update({
         where: { id: input.saleId },
         data: {
           customerId: input.customerId,
           workerId: input.workerId,
           feeWorker: input.feeWorker,
+          discount: input.discount,
+          totalPrice: nextTotalPrice,
+          totalProfit: nextTotalProfit,
         },
       });
 
@@ -1156,6 +1191,9 @@ export async function updateAccessorySale(
       }
       if (sale.feeWorker !== input.feeWorker) {
         changes.push(`fee worker: ${sale.feeWorker} → ${input.feeWorker}`);
+      }
+      if (sale.discount !== input.discount) {
+        changes.push(`diskon: ${sale.discount} → ${input.discount}`);
       }
 
       if (!changes.length) {

@@ -248,6 +248,8 @@ model AccessorySale {
 
   feeWorker Int
 
+  discount Int @default(0) // dalam rupiah
+
   workerId Int
   worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
