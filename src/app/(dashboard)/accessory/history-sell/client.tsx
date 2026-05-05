@@ -622,7 +622,7 @@ export function AccessoryHistorySellClient({
 
       <Dialog open={editingSale !== null} onOpenChange={(open) => !open && setEditingSale(null)}>
         {/* HAPUS overflow-auto dan ganti dengan overflow-hidden agar modal tidak tembus layar */}
-        <DialogContent className="max-w-6xl w-[95vw] h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogContent className="max-w-6xl min-w-[95vw]! h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
 
           {/* Tambahkan shrink-0 dan bg-background agar header tetap di posisinya */}
           <div className="p-4 md:p-6 border-b flex items-center justify-between shrink-0 bg-background z-10">

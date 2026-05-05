@@ -570,3 +570,49 @@ enum ImbursementLogType {
   UPDATE
   DELETE
 }
+
+// Ledger bersifat immutable dan harus dimasukkan ke db transaction setiap ada write
+// berfungsi untuk melihat saldo real, berdasarkan transaksi yang ada
+// Ledger bersifat immutable (Append-Only)
+model Ledger {
+  id BigInt @id @default(autoincrement())
+
+  actionType    LedgerActionType
+  referenceType ReferenceType
+  referenceId   Int
+
+  // Menggunakan BigInt untuk nominal uang (Rupiah) agar tidak kena limit 2.1 Miliar
+  // Jika pakai BigInt, perhatikan saat return JSON di backend (BigInt perlu diubah ke String)
+  beforeAmount BigInt @default(0)
+  afterAmount  BigInt
+  gapAmount    BigInt // bisa plus bisa minus
+
+  actionNote String @db.Text() // tuliskan dengan bahasa manusia untuk keterangannya
+
+  transactionDate DateTime // Tanggal transaksi riil (diinput user)
+  createdAt       DateTime @default(now()) // Waktu sistem mencatat (untuk urutan balance)
+}
+
+enum ReferenceType {
+  UNIT_SALE // uang masuk
+  UNIT_PURCHASE // uang keluar
+  ACCESSORY_SALE // uang masuk
+  ACCESSORY_PURCHASE // uang keluar
+  CASHFLOW // uang masuk atau keluar
+  IMBURSEMENT // uang keluar 
+}
+
+enum LedgerActionType {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+// Note: jika edit bisa isi dengan gapAmountnya
+// semisal UNIT_PURCHASE Rp 1.000.000 (saldo jadi -1.000.000)
+// lalu di edit menjadi Rp 1.200.000 (saldo jadi -1.200.000)
+// gapAmount di new row ledger yang akan di insert menjadi -Rp 200.000 (karena harga beli naik dari 1.000.000 menjadi 1.200.000)
+
+// jika delete, maka gapAmount = - ORIGINAL_AMOUNT
+
+// IMPORTANT: pastikan mengikuti saldo sebelumnya mengikuti row terakhir, yang dimana jika melakukan edit tanggal dll tidak berpengaruh, karena pastikan selalu mengikuti latest data
