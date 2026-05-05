@@ -124,6 +124,24 @@ function EditPurchaseDialog({
   const [price, setPrice] = useState(purchase.buyPricePerUnit.toString());
   const [note, setNote] = useState(purchase.note ?? "");
 
+  // Initialize SN from existing units
+  const [serialNumbers, setSerialNumbers] = useState<string[]>(() => {
+    return Array.from({ length: purchase.quantity }).map((_, i) => {
+      return purchase.units[i]?.serialNumber ?? "";
+    });
+  });
+
+  function handleQtyChange(newQtyStr: string) {
+    setQty(newQtyStr);
+    const newQty = parseInt(newQtyStr, 10) || 0;
+    setSerialNumbers((prev) => {
+      if (newQty > prev.length) {
+        return [...prev, ...Array(newQty - prev.length).fill("")];
+      }
+      return prev.slice(0, newQty);
+    });
+  }
+
   function handleSave() {
     const qtyNum = parseInt(qty, 10);
     const priceNum = parseInt(price, 10);
@@ -135,6 +153,15 @@ function EditPurchaseDialog({
       toast.error("Harga harus 0 atau lebih.");
       return;
     }
+
+    // Pastikan tidak ada SN duplikat dalam form
+    const filledSns = serialNumbers.filter((sn) => sn.trim().length > 0);
+    const uniqueSns = new Set(filledSns);
+    if (uniqueSns.size !== filledSns.length) {
+      toast.error("Terdapat Serial Number yang duplikat dalam form ini.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await updateAccessoryPurchase({
         purchaseId: purchase.id,
@@ -142,6 +169,7 @@ function EditPurchaseDialog({
         quantity: qtyNum,
         buyPricePerUnit: priceNum,
         note: note || undefined,
+        serialNumbers,
       });
       if (result.success) {
         toast.success("Data pembelian berhasil diperbarui.");
@@ -155,7 +183,7 @@ function EditPurchaseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Data Pembelian</DialogTitle>
         </DialogHeader>
@@ -166,7 +194,7 @@ function EditPurchaseDialog({
               <Input
                 type="number"
                 value={qty}
-                onChange={(e) => setQty(e.target.value)}
+                onChange={(e) => handleQtyChange(e.target.value)}
                 min={1}
               />
             </div>
@@ -189,8 +217,44 @@ function EditPurchaseDialog({
               rows={2}
             />
           </div>
-          <p className="text-xs text-muted-foreground rounded-md bg-muted p-2">
+
+          <Separator />
+          
+          <div className="space-y-2">
+            <Label>Serial Number (Opsional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Jika dikosongkan, barang akan tercatat tanpa nomor seri khusus.
+            </p>
+            {serialNumbers.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {serialNumbers.map((sn, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-6">
+                      #{idx + 1}
+                    </span>
+                    <Input
+                      placeholder={`Serial Number Unit ${idx + 1}`}
+                      value={sn}
+                      onChange={(e) => {
+                        const newSn = [...serialNumbers];
+                        newSn[idx] = e.target.value;
+                        setSerialNumbers(newSn);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground italic border border-dashed rounded-md p-4 text-center">
+                Silakan isi jumlah aksesoris terlebih dahulu.
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground rounded-md bg-muted p-2 mt-4">
             ⚠️ Mengubah qty atau harga akan merecalculate Moving Average Cost (MAC) secara otomatis.
+            <br />
+            Jika Anda mengurangi jumlah, sistem akan menghapus unit yang belum terjual.
           </p>
         </div>
         <DialogFooter>

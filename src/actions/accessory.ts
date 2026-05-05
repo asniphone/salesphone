@@ -1109,6 +1109,7 @@ interface UpdateAccessorySaleInput {
   workerId: number;
   feeWorker: number;
   discount: number;
+  items: { accessoryId: number; unitIds: number[] }[];
 }
 
 export async function updateAccessorySale(
@@ -1117,6 +1118,9 @@ export async function updateAccessorySale(
   try {
     const userId = await requireUserId();
 
+    if (!input.items.length) {
+      return { success: false, error: "Keranjang tidak boleh kosong." };
+    }
     if (!input.customerId || input.customerId < 1) {
       return { success: false, error: "Customer wajib dipilih." };
     }
@@ -1143,7 +1147,6 @@ export async function updateAccessorySale(
           },
         },
       });
-
       const [nextCustomer, nextWorker] = await Promise.all([
         tx.customer.findFirstOrThrow({
           where: { id: input.customerId, deletedAt: null },
@@ -1153,14 +1156,103 @@ export async function updateAccessorySale(
         }),
       ]);
 
-      const grossTotalPrice = sale.items.reduce(
-        (sum, item) => sum + item.sellPricePerUnit * item.quantity,
-        0,
-      );
-      const grossTotalProfit = sale.items.reduce(
-        (sum, item) => sum + item.profitPerUnit * item.quantity,
-        0,
-      );
+      // 1. Release old units and delete old sale items
+      const oldItemIds = sale.items.map((i) => i.id);
+
+      // Detach units and set to AVAILABLE
+      if (oldItemIds.length > 0) {
+        await tx.accessoryUnit.updateMany({
+          where: { saleItemId: { in: oldItemIds }, deletedAt: null },
+          data: {
+            status: "AVAILABLE",
+            saleItemId: null,
+          },
+        });
+
+        // Delete old sale items
+        await tx.accessorySaleItem.deleteMany({
+          where: { id: { in: oldItemIds } },
+        });
+      }
+
+      // 2. Collect all new unit IDs and validate
+      const allNewUnitIds = input.items.flatMap((i) => i.unitIds);
+      const units = await tx.accessoryUnit.findMany({
+        where: { id: { in: allNewUnitIds }, deletedAt: null },
+      });
+      const unitMap = new Map(units.map((u) => [u.id, u]));
+
+      // Validate all units exist and are AVAILABLE (they might have just been made AVAILABLE above if they were in the old cart)
+      for (const unitId of allNewUnitIds) {
+        const unit = unitMap.get(unitId);
+        if (!unit) {
+          throw new Error(`Unit ID ${unitId} tidak ditemukan.`);
+        }
+        if (unit.status !== "AVAILABLE") {
+          throw new Error(
+            `Unit ID ${unitId} (SN: ${unit.serialNumber ?? "Tanpa SN"}) sudah terjual.`,
+          );
+        }
+      }
+
+      // 3. Get accessories for pricing
+      const newAccessoryIds = [...new Set(input.items.map((i) => i.accessoryId))];
+      const accessories = await tx.accessory.findMany({
+        where: { id: { in: newAccessoryIds }, deletedAt: null },
+      });
+      const accessoryMap = new Map(accessories.map((a) => [a.id, a]));
+
+      let grossTotalPrice = 0;
+      let grossTotalProfit = 0;
+
+      // 4. Process each new item
+      for (const item of input.items) {
+        const acc = accessoryMap.get(item.accessoryId);
+        if (!acc) {
+          throw new Error(`Aksesoris ID ${item.accessoryId} tidak ditemukan.`);
+        }
+
+        const quantity = item.unitIds.length;
+        if (quantity === 0) continue;
+
+        const itemUnits = item.unitIds.map((id) => unitMap.get(id)!);
+
+        // Calculate buy price for this batch (average of selected units)
+        const totalBuyPrice = itemUnits.reduce(
+          (sum, u) => sum + u.buyPrice,
+          0,
+        );
+        const avgBuyPrice = Math.round(totalBuyPrice / quantity);
+
+        const sellPricePerUnit = acc.sellPrice;
+        const profitPerUnit = sellPricePerUnit - avgBuyPrice;
+
+        grossTotalPrice += sellPricePerUnit * quantity;
+        grossTotalProfit += profitPerUnit * quantity;
+
+        // Create sale item
+        const saleItem = await tx.accessorySaleItem.create({
+          data: {
+            saleId: sale.id,
+            accessoryId: item.accessoryId,
+            quantity,
+            recordedBuyPricePerUnit: avgBuyPrice,
+            sellPricePerUnit,
+            profitPerUnit,
+          },
+        });
+
+        // Mark units as SOLD
+        for (const unit of itemUnits) {
+          await tx.accessoryUnit.update({
+            where: { id: unit.id },
+            data: {
+              status: "SOLD",
+              saleItemId: saleItem.id,
+            },
+          });
+        }
+      }
 
       if (input.discount > grossTotalPrice) {
         throw new Error("Diskon tidak boleh melebihi subtotal belanja.");
@@ -1169,8 +1261,9 @@ export async function updateAccessorySale(
       const nextTotalPrice = grossTotalPrice - input.discount;
       const nextTotalProfit = grossTotalProfit - input.discount;
 
+      // Update sale totals
       await tx.accessorySale.update({
-        where: { id: input.saleId },
+        where: { id: sale.id },
         data: {
           customerId: input.customerId,
           workerId: input.workerId,
@@ -1181,39 +1274,31 @@ export async function updateAccessorySale(
         },
       });
 
-      const changes: string[] = [];
+      // 5. Recalculate stock and log for ALL affected accessories
+      const affectedAccessoryIds = new Set([
+        ...sale.items.map((i) => i.accessoryId),
+        ...newAccessoryIds,
+      ]);
 
-      if (sale.customerId !== input.customerId) {
-        changes.push(`customer: ${sale.customer.name} → ${nextCustomer.name}`);
-      }
-      if (sale.workerId !== input.workerId) {
-        changes.push(`worker: ${sale.worker.name} → ${nextWorker.name}`);
-      }
-      if (sale.feeWorker !== input.feeWorker) {
-        changes.push(`fee worker: ${sale.feeWorker} → ${input.feeWorker}`);
-      }
-      if (sale.discount !== input.discount) {
-        changes.push(`diskon: ${sale.discount} → ${input.discount}`);
-      }
+      for (const accId of affectedAccessoryIds) {
+        const oldAcc = await tx.accessory.findUniqueOrThrow({
+          where: { id: accId },
+        });
 
-      if (!changes.length) {
-        return;
-      }
+        const { newStock, newMAC } = await recalculateAccessoryStock(tx, accId);
 
-      for (const item of sale.items) {
         await tx.accessoryLog.create({
           data: {
             type: "UPDATE",
             kind: "SALE",
-            accessoryId: item.accessoryId,
+            accessoryId: accId,
             userId,
             saleId: sale.id,
-            saleItemId: item.id,
-            beforeRecordedStock: item.accessory.recordedStock,
-            afterRecordedStock: item.accessory.recordedStock,
-            beforeRecordedBuyPrice: item.accessory.recordedBuyPrice,
-            afterRecordedBuyPrice: item.accessory.recordedBuyPrice,
-            logNote: `Edit penjualan #${sale.id}: ${changes.join(", ")}`,
+            beforeRecordedStock: oldAcc.recordedStock,
+            afterRecordedStock: newStock,
+            beforeRecordedBuyPrice: oldAcc.recordedBuyPrice,
+            afterRecordedBuyPrice: newMAC,
+            logNote: `Edit penjualan #${sale.id} (pembaruan keranjang/detail).`,
           },
         });
       }

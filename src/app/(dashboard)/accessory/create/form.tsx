@@ -98,7 +98,7 @@ export function AccessoryCreateForm() {
           <Separator />
 
           {/* Stok Awal */}
-          <div className="space-y-3">
+          {/* <div className="space-y-3">
             <div>
               <p className="text-sm font-medium">Stok Awal (Opsional)</p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -136,7 +136,7 @@ export function AccessoryCreateForm() {
                 rows={2}
               />
             </div>
-          </div>
+          </div> */}
         </CardContent>
         <CardFooter className="flex justify-between">
           <Button

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getAccessorySales } from "@/actions/accessory";
+import { getAccessorySales, getAccessoriesForSale } from "@/actions/accessory";
 import { getCustomers } from "@/actions/customer";
 import { getWorkers } from "@/actions/worker";
 import { getCommonInformation } from "@/actions/common-information";
@@ -38,7 +38,7 @@ export default async function AccessoryHistorySellPage({ searchParams }: Accesso
   const dateRangeFrom = params.dateRangeFrom || undefined;
   const dateRangeTo = params.dateRangeTo || undefined;
 
-  const [result, customersResult, workersResult, commonInformationResult] = await Promise.all([
+  const [result, customersResult, workersResult, commonInformationResult, accessoriesResult] = await Promise.all([
     getAccessorySales({
       search,
       page,
@@ -49,6 +49,7 @@ export default async function AccessoryHistorySellPage({ searchParams }: Accesso
     getCustomers(),
     getWorkers(),
     getCommonInformation(),
+    getAccessoriesForSale(),
   ]);
 
   const data = result.data ?? {
@@ -60,6 +61,7 @@ export default async function AccessoryHistorySellPage({ searchParams }: Accesso
   };
   const customers = customersResult.data ?? [];
   const workers = workersResult.data ?? [];
+  const accessories = accessoriesResult.data ?? [];
   const storeInformation = commonInformationResult.data ?? {
     storeName: "POS Internal",
     storeAddress: "-",
@@ -111,6 +113,7 @@ export default async function AccessoryHistorySellPage({ searchParams }: Accesso
               sales={data.sales}
               customers={customers}
               workers={workers}
+              accessories={accessories}
               storeInformation={{
                 storeName: storeInformation.storeName,
                 storeAddress: storeInformation.storeAddress,
