@@ -1,11 +1,11 @@
-import { getSession } from "@/lib/session";
+import { getCurrentUserAccess } from "@/lib/access";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./form";
 
 export default async function LoginPage() {
-  // Jika sudah login, redirect ke dashboard
-  const session = await getSession();
-  if (session) {
+  // Jika sudah login dan user valid, redirect ke dashboard
+  const userAccess = await getCurrentUserAccess();
+  if (userAccess) {
     redirect("/dashboard");
   }
 

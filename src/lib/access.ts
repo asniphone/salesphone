@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { getSession, deleteSession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
 // ============================================================
@@ -77,8 +77,7 @@ export const getCurrentUserAccess = cache(
     });
 
     if (!user) {
-      // User deleted or not found — clear session
-      await deleteSession();
+      // User deleted or not found — session is invalid
       return null;
     }
 

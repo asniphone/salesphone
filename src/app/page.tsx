@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
+import { getCurrentUserAccess } from "@/lib/access";
 
 export default async function RootPage() {
-  // Jika sudah login, langsung ke dashboard
-  const session = await getSession();
-  if (session) {
+  // Jika sudah login dan user valid, langsung ke dashboard
+  const userAccess = await getCurrentUserAccess();
+  if (userAccess) {
     redirect("/dashboard");
   }
 
