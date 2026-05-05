@@ -60,6 +60,8 @@ export interface UserAccess {
   accessImbursementCreate: boolean;
   accessImbursementUpdate: boolean;
   accessImbursementDelete: boolean;
+  // ledger
+  accessLedgerRead: boolean;
 }
 
 // ============================================================
@@ -136,6 +138,8 @@ export const getCurrentUserAccess = cache(
       accessImbursementCreate: sa || user.accessImbursementCreate,
       accessImbursementUpdate: sa || user.accessImbursementUpdate,
       accessImbursementDelete: sa || user.accessImbursementDelete,
+
+      accessLedgerRead: sa || user.accessLedgerRead,
     };
   },
 );

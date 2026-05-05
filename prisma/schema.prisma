@@ -80,6 +80,8 @@ model User {
   accessImbursementCreate    Boolean @default(false)
   accessImbursementUpdate    Boolean @default(false)
   accessImbursementDelete    Boolean @default(false)
+  // access ledger
+  accessLedgerRead           Boolean @default(false)
 }
 
 model Unit {

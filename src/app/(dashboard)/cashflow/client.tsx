@@ -244,7 +244,7 @@ export function CashflowListClient({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* <div className="grid gap-4 md:grid-cols-3">
         {summaryCards.map((item) => (
           <Card key={item.title} className={item.className}>
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
@@ -263,7 +263,7 @@ export function CashflowListClient({
             </CardContent>
           </Card>
         ))}
-      </div>
+      </div> */}
 
       <div className="flex items-center justify-end">
         <Dialog
@@ -298,34 +298,34 @@ export function CashflowListClient({
                 Tambah Cashflow
               </Button>
             </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Tambah Cashflow</DialogTitle>
-              <DialogDescription>
-                Catat pemasukan atau pengeluaran baru tanpa pindah halaman.
-              </DialogDescription>
-            </DialogHeader>
-            <CashflowForm
-              mode="create"
-              isPending={isPending}
-              onCancel={() => setIsCreateOpen(false)}
-              onSubmit={(value) => {
-                startTransition(async () => {
-                  const result = await createCashflow(value);
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Tambah Cashflow</DialogTitle>
+                <DialogDescription>
+                  Catat pemasukan atau pengeluaran baru tanpa pindah halaman.
+                </DialogDescription>
+              </DialogHeader>
+              <CashflowForm
+                mode="create"
+                isPending={isPending}
+                onCancel={() => setIsCreateOpen(false)}
+                onSubmit={(value) => {
+                  startTransition(async () => {
+                    const result = await createCashflow(value);
 
-                  if (result.success) {
-                    toast.success("Transaksi cashflow berhasil ditambahkan.");
-                    setIsCreateOpen(false);
-                    router.refresh();
-                    return;
-                  }
+                    if (result.success) {
+                      toast.success("Transaksi cashflow berhasil ditambahkan.");
+                      setIsCreateOpen(false);
+                      router.refresh();
+                      return;
+                    }
 
-                  toast.error(result.error ?? "Gagal menambahkan cashflow.");
-                });
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+                    toast.error(result.error ?? "Gagal menambahkan cashflow.");
+                  });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
         )}
       </div>
       {cashflows.length === 0 ? (

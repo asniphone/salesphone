@@ -33,6 +33,7 @@ import {
   Wallet,
   HandCoins,
   type LucideIcon,
+  ArrowUpLeftFromCircleIcon,
 } from "lucide-react";
 import { logout } from "@/actions/auth";
 import type { UserAccess } from "@/lib/access";
@@ -117,12 +118,17 @@ export function DashboardSidebar({ userAccess, commonInformation }: DashboardSid
 
   // Cashflow
   if (userAccess.accessCashflowRead) {
-    menuItems.push({ title: "Arus Kas Operasional", url: "/cashflow", icon: Wallet });
+    menuItems.push({ title: "Arus Kas Operasional", url: "/cashflow", icon: ArrowUpLeftFromCircleIcon });
   }
 
   // Imbursement
   if (userAccess.accessImbursementRead) {
     menuItems.push({ title: "Pencairan Fee", url: "/imbursement", icon: HandCoins });
+  }
+
+  // Ledger
+  if (userAccess.accessLedgerRead) {
+    menuItems.push({ title: "Riwayat Saldo", url: "/ledger", icon: Wallet });
   }
 
   return (
