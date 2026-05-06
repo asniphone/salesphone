@@ -297,7 +297,7 @@ export function UnitDetailClient({
           } else {
             toast.error(
               invoiceResult.error ??
-                "Status berhasil, namun invoice customer gagal dikirim.",
+              "Status berhasil, namun invoice customer gagal dikirim.",
             );
           }
         }
@@ -309,7 +309,7 @@ export function UnitDetailClient({
           } else {
             toast.error(
               receiptResult.error ??
-                "Status berhasil, namun receipt worker gagal dikirim.",
+              "Status berhasil, namun receipt worker gagal dikirim.",
             );
           }
         }
@@ -498,9 +498,9 @@ export function UnitDetailClient({
                 <Label>IMEI</Label>
                 <div className="flex items-center gap-2">
                   <Input value={imei} onChange={(e) => setImei(e.target.value)} className="flex-1" />
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
+                  <Button
+                    type="button"
+                    variant="secondary"
                     onClick={() => setIsScannerOpen(true)}
                   >
                     Scan Kamera
@@ -598,8 +598,8 @@ export function UnitDetailClient({
                   <p className="text-muted-foreground">Foto Unit</p>
                   <div className="flex flex-wrap gap-2">
                     {unit.images.map((url, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className="relative h-20 w-20 rounded-md border overflow-hidden cursor-pointer opacity-90 transition-opacity hover:opacity-100 ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
                         onClick={() => setFullscreenImage(url)}
                       >
@@ -639,7 +639,7 @@ export function UnitDetailClient({
 
       {/* Status Change Dialog */}
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Ubah Status ke {selectedStatus ? UNIT_STATUS_CONFIG[selectedStatus as Status].label : ""}
@@ -907,12 +907,12 @@ export function UnitDetailClient({
           <DialogTitle className="sr-only">Fullscreen Image</DialogTitle>
           <div className="relative w-full h-full flex items-center justify-center">
             {fullscreenImage && (
-              <Image 
-                src={fullscreenImage} 
-                alt="Fullscreen" 
-                fill 
+              <Image
+                src={fullscreenImage}
+                alt="Fullscreen"
+                fill
                 className="object-contain"
-                sizes="(max-width: 1024px) 100vw, 1024px" 
+                sizes="(max-width: 1024px) 100vw, 1024px"
                 quality={100}
                 priority
               />
@@ -920,14 +920,14 @@ export function UnitDetailClient({
           </div>
         </DialogContent>
       </Dialog>
-      
-      <CameraScanner 
-        open={isScannerOpen} 
-        onOpenChange={setIsScannerOpen} 
+
+      <CameraScanner
+        open={isScannerOpen}
+        onOpenChange={setIsScannerOpen}
         onScan={(code) => {
           setImei(code);
           toast.success("IMEI berhasil di-scan dari kamera!");
-        }} 
+        }}
       />
     </div>
   );

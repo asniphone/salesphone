@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDashboardSummary } from "@/actions/report";
 import { getCurrentUserAccess } from "@/lib/access";
+import { getCommonInformation } from "@/actions/common-information";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -18,19 +19,38 @@ import {
   Minus,
   Activity
 } from "lucide-react";
+import { ReportFilter } from "./report-filter";
+import { PdfExportButtons } from "./pdf-export-buttons";
+import { computeDateRange, type DateRangePreset } from "@/lib/date-range";
 
-export default async function DashboardPage() {
+interface DashboardPageProps {
+  searchParams: Promise<{
+    preset?: string;
+    from?: string;
+    to?: string;
+  }>;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const userAccess = await getCurrentUserAccess();
   if (!userAccess) redirect("/login");
   if (!userAccess.accessDashboardGeneralRead) redirect("/profile?forbidden=1");
 
-  const summaryResult = await getDashboardSummary();
+  const params = await searchParams;
+  const preset = (params.preset as DateRangePreset | undefined) ?? "thisMonth";
+  const dateRange = computeDateRange(preset, params.from, params.to);
+
+  const [summaryResult, ciResult] = await Promise.all([
+    getDashboardSummary(),
+    getCommonInformation(),
+  ]);
+  const storeName = ciResult.data?.storeName ?? "POS Internal";
   const data = summaryResult.data ?? {
     unit: { available: 0, soldThisMonth: 0, pendapatanThisMonth: 0, keuntunganThisMonth: 0 },
     accessory: { terjualThisMonth: 0, pendapatanThisMonth: 0, keuntunganThisMonth: 0 },
     customer: { total: 0, newThisMonth: 0 },
     worker: { active: 0 },
-    cashflow: { saldoAkhir: 0 },
+    cashflow: { saldoAkhir: "0" },
   };
 
   const formatCurrency = (value: number) => {
@@ -41,6 +61,13 @@ export default async function DashboardPage() {
     }).format(value);
   };
 
+  function formatCurrencyFromString(value: string): string {
+    const amount = BigInt(value);
+    const abs = amount < BigInt(0) ? -amount : amount;
+    const sign = amount < BigInt(0) ? "-" : "";
+    return `${sign}Rp ${abs.toLocaleString("id-ID")}`;
+  }
+
   // Helper untuk warna text berdasarkan nilai (merah jika minus, hijau jika plus, abu/default jika 0)
   const getTextColorClass = (value: number) => {
     if (value < 0) return "text-red-600 dark:text-red-500";
@@ -48,15 +75,22 @@ export default async function DashboardPage() {
     return "text-foreground";
   };
 
-  // Helper untuk warna border
-  const getBorderColorClass = (value: number) => {
-    if (value < 0) return "border-red-200 dark:border-red-900/40";
-    if (value > 0) return "border-green-200 dark:border-green-900/40";
+  // Helper untuk warna border — untuk BigInt string
+  const getBorderColorClassFromString = (value: string) => {
+    const n = BigInt(value);
+    if (n < BigInt(0)) return "border-red-200 dark:border-red-900/40";
+    if (n > BigInt(0)) return "border-green-200 dark:border-green-900/40";
     return "border-border";
   };
 
+  const getTextColorClassFromString = (value: string) => {
+    const n = BigInt(value);
+    if (n < BigInt(0)) return "text-red-600 dark:text-red-500";
+    if (n > BigInt(0)) return "text-green-600 dark:text-green-500";
+    return "text-foreground";
+  };
+
   // Helper date for labels
-  const currentMonthLabel = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date());
 
   return (
     <>
@@ -67,26 +101,47 @@ export default async function DashboardPage() {
       </header>
 
       <div className="p-4 md:p-6 space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Ikhtisar Penjualan</h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            Ringkasan data transaksi, inventaris, dan pelanggan untuk bulan {currentMonthLabel}.
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Ikhtisar Penjualan</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              Ringkasan data transaksi, inventaris, dan pelanggan — {preset === "custom" ? `${dateRange.from} s/d ${dateRange.to}` : preset === "today" ? "Hari Ini" : preset === "7days" ? "7 Hari Terakhir" : preset === "thisMonth" ? "Bulan Ini" : "1 Bulan Terakhir"}.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <ReportFilter preset={preset} dateFrom={params.from} dateTo={params.to} />
+            <PdfExportButtons
+              storeName={storeName}
+              dateRangeFrom={dateRange.from}
+              dateRangeTo={dateRange.to}
+              dateLabel={
+                preset === "custom"
+                  ? `${dateRange.from} s/d ${dateRange.to}`
+                  : preset === "today"
+                    ? "Hari Ini"
+                    : preset === "7days"
+                      ? "7 Hari Terakhir"
+                      : preset === "thisMonth"
+                        ? "Bulan Ini"
+                        : "1 Bulan Terakhir"
+              }
+            />
+          </div>
         </div>
 
         {/* TOP LEVEL METRICS */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
-          <Card className={`${getBorderColorClass(data.cashflow.saldoAkhir)} col-span-2 lg:col-span-1`}>
+          <Card className={`${getBorderColorClassFromString(data.cashflow.saldoAkhir)} col-span-2 lg:col-span-1`}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Saldo Kas</CardTitle>
-              <Wallet className={`h-4 w-4 ${data.cashflow.saldoAkhir < 0 ? "text-red-600" : "text-green-600"}`} />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Saldo</CardTitle>
+              <Wallet className={`h-4 w-4 ${BigInt(data.cashflow.saldoAkhir) < BigInt(0) ? "text-red-600" : "text-green-600"}`} />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${getTextColorClass(data.cashflow.saldoAkhir)}`}>
-                {formatCurrency(data.cashflow.saldoAkhir)}
+              <div className={`text-2xl font-bold ${getTextColorClassFromString(data.cashflow.saldoAkhir)}`}>
+                {formatCurrencyFromString(data.cashflow.saldoAkhir)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Total uang saat ini
+                Saldo Terdata
               </p>
             </CardContent>
           </Card>

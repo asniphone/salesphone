@@ -649,7 +649,7 @@ export interface DashboardSummaryData {
     active: number;
   };
   cashflow: {
-    saldoAkhir: number;
+    saldoAkhir: string;
   };
 }
 
@@ -722,21 +722,11 @@ export async function getDashboardSummary(): Promise<ActionResult<DashboardSumma
       where: { deletedAt: null, isActive: true },
     });
 
-    // 5. Cashflow Saldo Akhir
-    let saldoAkhir = 0;
-    const cashflowSums = await prisma.cashflow.groupBy({
-      by: ["type"],
-      where: { deletedAt: null },
-      _sum: { amount: true },
+    // 5. Saldo — dari ledger terbaru (append-only, mencakup semua transaksi)
+    const latestLedger = await prisma.ledger.findFirst({
+      orderBy: { id: "desc" },
     });
-    
-    for (const group of cashflowSums) {
-      if (group.type === "INCOME") {
-        saldoAkhir += group._sum.amount ?? 0;
-      } else if (group.type === "EXPENSE") {
-        saldoAkhir -= group._sum.amount ?? 0;
-      }
-    }
+    const saldoAkhir = (latestLedger?.afterAmount ?? BigInt(0)).toString();
 
     return {
       success: true,
@@ -767,5 +757,163 @@ export async function getDashboardSummary(): Promise<ActionResult<DashboardSumma
   } catch (error) {
     console.error("getDashboardSummary error:", error);
     return { success: false, error: "Gagal mengambil summary dashboard." };
+  }
+}
+
+// ============================================================
+// PDF REPORT DATA
+// ============================================================
+
+export interface PdfUnitReportData {
+  rows: {
+    name: string;
+    status: string;
+    soldPrice: number;
+    buyPrice: number;
+    profit: number;
+    workerFee: number;
+    netProfit: number;
+    soldAt: string;
+  }[];
+  summary: {
+    unitSold: number;
+    totalPendapatan: number;
+    totalKeuntunganBersih: number;
+  };
+}
+
+export interface PdfAccessoryReportData {
+  sales: {
+    id: number;
+    date: string;
+    customer: string;
+    items: string;
+    totalPrice: number;
+    totalProfit: number;
+  }[];
+  summary: {
+    totalTransaksi: number;
+    totalPendapatan: number;
+    totalKeuntungan: number;
+  };
+}
+
+export async function getPdfUnitReportData(
+  dateRangeFrom: string,
+  dateRangeTo: string,
+): Promise<ActionResult<PdfUnitReportData>> {
+  try {
+    const dateRange = buildDateRange({ dateRangeFrom, dateRangeTo });
+
+    const soldUnits = await prisma.unit.findMany({
+      where: {
+        deletedAt: null,
+        status: "SOLD",
+        soldAt: dateRange ?? undefined,
+      },
+      select: {
+        name: true,
+        status: true,
+        soldPrice: true,
+        buyPrice: true,
+        soldAt: true,
+        workerFee: true,
+      },
+      orderBy: { soldAt: "desc" },
+    });
+
+    const rows = soldUnits.map((u) => ({
+      name: u.name,
+      status: u.status,
+      soldPrice: u.soldPrice ?? 0,
+      buyPrice: u.buyPrice ?? 0,
+      profit: (u.soldPrice ?? 0) - (u.buyPrice ?? 0),
+      workerFee: u.workerFee ?? 0,
+      netProfit: (u.soldPrice ?? 0) - (u.buyPrice ?? 0) - (u.workerFee ?? 0),
+      soldAt: u.soldAt?.toISOString() ?? "",
+    }));
+
+    let totalPendapatan = 0;
+    let totalKeuntunganBersih = 0;
+    for (const row of rows) {
+      totalPendapatan += row.soldPrice;
+      totalKeuntunganBersih += row.netProfit;
+    }
+
+    return {
+      success: true,
+      data: {
+        rows,
+        summary: {
+          unitSold: rows.length,
+          totalPendapatan,
+          totalKeuntunganBersih,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("getPdfUnitReportData error:", error);
+    return { success: false, error: "Gagal mengambil data laporan unit." };
+  }
+}
+
+export async function getPdfAccessoryReportData(
+  dateRangeFrom: string,
+  dateRangeTo: string,
+): Promise<ActionResult<PdfAccessoryReportData>> {
+  try {
+    const dateRange = buildDateRange({ dateRangeFrom, dateRangeTo });
+
+    const sales = await prisma.accessorySale.findMany({
+      where: {
+        deletedAt: null,
+        createdAt: dateRange ?? undefined,
+      },
+      select: {
+        id: true,
+        totalPrice: true,
+        totalProfit: true,
+        createdAt: true,
+        customer: { select: { name: true } },
+        items: {
+          select: {
+            quantity: true,
+            accessory: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const salesData = sales.map((s) => ({
+      id: s.id,
+      date: s.createdAt.toLocaleDateString("id-ID"),
+      customer: s.customer.name,
+      items: s.items.map((i) => `${i.accessory.name} x${i.quantity}`).join(", "),
+      totalPrice: s.totalPrice,
+      totalProfit: s.totalProfit,
+    }));
+
+    let totalPendapatan = 0;
+    let totalKeuntungan = 0;
+    for (const s of sales) {
+      totalPendapatan += s.totalPrice;
+      totalKeuntungan += s.totalProfit;
+    }
+
+    return {
+      success: true,
+      data: {
+        sales: salesData,
+        summary: {
+          totalTransaksi: sales.length,
+          totalPendapatan,
+          totalKeuntungan,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("getPdfAccessoryReportData error:", error);
+    return { success: false, error: "Gagal mengambil data laporan aksesoris." };
   }
 }
