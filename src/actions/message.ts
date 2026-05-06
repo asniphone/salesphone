@@ -351,7 +351,7 @@ Terima kasih atas kepercayaannya. Semoga hari Anda menyenangkan!`;
         content: message,
         status: sent ? "SUCCESS" : "FAILED",
         userId,
-        customerId: sale.customerId,
+        customerId: sale.customer.id,
       },
     });
 
@@ -417,7 +417,7 @@ Tanggal: ${dateStr}
 ━━━━━━━━━━━━━━━━━━━━━━
 • Toko: *${storeInformation.storeName}*
 • Telepon: ${storeInformation.storePhone}
-• Customer: ${sale.customer.name}
+• Customer: ${sale.customer?.name ?? "-"}
 ━━━━━━━━━━━━━━━━━━━━━━
 ${itemsStr}
 ━━━━━━━━━━━━━━━━━━━━━━

@@ -213,6 +213,12 @@ export function UnitDetailClient({
     setWorkerFee(nextWorkerFee.toString());
   }, [selectedStatus, soldPrice, unit.buyPrice, unitFeePercentage]);
 
+  useEffect(() => {
+    if (selectedStatus !== "SOLD") return;
+    if (customerId) return;
+    setSendCustomerInvoiceOnSold(false);
+  }, [selectedStatus, customerId]);
+
   function handleSaveEdit() {
     startTransition(async () => {
       const result = await updateUnit({
@@ -692,18 +698,28 @@ export function UnitDetailClient({
                       </Button>
                     </div>
                   ) : (
-                    <Select value={customerId} onValueChange={setCustomerId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih customer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {customerList.map((c) => (
-                          <SelectItem key={c.id} value={c.id.toString()}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="space-y-2">
+                      <Select value={customerId} onValueChange={setCustomerId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih customer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {customerList.map((c) => (
+                            <SelectItem key={c.id} value={c.id.toString()}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCustomerId("")}
+                      >
+                        Tanpa Customer
+                      </Button>
+                    </div>
                   )}
                 </div>
 
@@ -793,6 +809,7 @@ export function UnitDetailClient({
                     <Checkbox
                       id="sendCustomerInvoiceOnSold"
                       checked={sendCustomerInvoiceOnSold}
+                      disabled={!customerId}
                       onCheckedChange={(checked) =>
                         setSendCustomerInvoiceOnSold(checked === true)
                       }
@@ -805,7 +822,9 @@ export function UnitDetailClient({
                         Kirim invoice ke customer
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                        Membutuhkan nomor WhatsApp pada data customer.
+                        {!customerId
+                          ? "Pilih customer terlebih dahulu untuk mengaktifkan opsi ini."
+                          : "Membutuhkan nomor WhatsApp pada data customer."}
                       </p>
                     </div>
                   </div>

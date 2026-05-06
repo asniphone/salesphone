@@ -95,7 +95,7 @@ export function AccessoryReceiptPrintButton({ sale, storeInformation }: Props) {
           <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>Customer</span>
             <span>:</span>
-            <span className={styles.tableValue}>{sale.customer.name}</span>
+            <span className={styles.tableValue}>{sale.customer?.name || "-"}</span>
           </div>
           <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>Email</span>
@@ -105,13 +105,13 @@ export function AccessoryReceiptPrintButton({ sale, storeInformation }: Props) {
           <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>HP</span>
             <span>:</span>
-            <span className={styles.tableValue}>{sale.customer.phone || "-"}</span>
+            <span className={styles.tableValue}>{sale.customer?.phone || "-"}</span>
           </div>
-          <div className={styles.tableHeader}>
+          {/* <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>ID Card</span>
             <span>:</span>
             <span className={styles.tableValue}>-</span>
-          </div>
+          </div> */}
 
           <div className={styles.divider} />
 

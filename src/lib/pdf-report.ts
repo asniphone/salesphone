@@ -71,11 +71,15 @@ export function generateAccessoryPdf(
     items: string;
     totalPrice: number;
     totalProfit: number;
+    feeWorker: number;
+    netProfit: number;
   }[],
   summary: {
     totalTransaksi: number;
     totalPendapatan: number;
-    totalKeuntungan: number;
+    totalKeuntunganKotor: number;
+    totalFeeWorker: number;
+    totalKeuntunganBersih: number;
   },
 ): Blob {
   const doc = new jsPDF({ orientation: "landscape" });
@@ -85,11 +89,15 @@ export function generateAccessoryPdf(
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text(`Periode: ${dateLabel}`, 14, 22);
-  doc.text(`Transaksi: ${summary.totalTransaksi} | Total Pendapatan: Rp ${summary.totalPendapatan.toLocaleString("id-ID")} | Laba Kotor: Rp ${summary.totalKeuntungan.toLocaleString("id-ID")}`, 14, 29);
+  doc.text(
+    `Transaksi: ${summary.totalTransaksi} | Pendapatan: Rp ${summary.totalPendapatan.toLocaleString("id-ID")} | Laba Kotor: Rp ${summary.totalKeuntunganKotor.toLocaleString("id-ID")} | Fee Worker: Rp ${summary.totalFeeWorker.toLocaleString("id-ID")} | Laba Bersih: Rp ${summary.totalKeuntunganBersih.toLocaleString("id-ID")}`,
+    14,
+    29,
+  );
 
   autoTable(doc, {
     startY: 35,
-    head: [["ID", "Tanggal", "Customer", "Item", "Total Harga", "Total Laba"]],
+    head: [["ID", "Tanggal", "Customer", "Item", "Total Harga", "Laba Kotor", "Fee Worker", "Laba Bersih"]],
     body: sales.map((s) => [
       String(s.id),
       s.date,
@@ -97,6 +105,8 @@ export function generateAccessoryPdf(
       s.items,
       `Rp ${s.totalPrice.toLocaleString("id-ID")}`,
       `Rp ${s.totalProfit.toLocaleString("id-ID")}`,
+      `Rp ${s.feeWorker.toLocaleString("id-ID")}`,
+      `Rp ${s.netProfit.toLocaleString("id-ID")}`,
     ]),
     styles: { fontSize: 8 },
     headStyles: { fillColor: [41, 128, 185], textColor: 255 },
@@ -105,8 +115,10 @@ export function generateAccessoryPdf(
       1: { cellWidth: 30 },
       2: { cellWidth: 50 },
       3: { cellWidth: "auto" },
-      4: { cellWidth: 40, halign: "right" },
-      5: { cellWidth: 40, halign: "right" },
+      4: { cellWidth: 32, halign: "right" },
+      5: { cellWidth: 32, halign: "right" },
+      6: { cellWidth: 30, halign: "right" },
+      7: { cellWidth: 32, halign: "right" },
     },
   });
 

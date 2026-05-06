@@ -821,7 +821,7 @@ interface SaleItem {
 }
 
 interface CreateAccessorySaleInput {
-  customerId: number;
+  customerId?: number | null;
   workerId: number;
   feeWorker: number;
   discount: number;
@@ -843,9 +843,6 @@ export async function createAccessorySale(
     if (!input.items.length) {
       return { success: false, error: "Keranjang tidak boleh kosong." };
     }
-    if (!input.customerId || input.customerId < 1) {
-      return { success: false, error: "Customer wajib dipilih." };
-    }
     if (!input.workerId || input.workerId < 1) {
       return { success: false, error: "Worker wajib dipilih." };
     }
@@ -857,14 +854,15 @@ export async function createAccessorySale(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const [customer, worker] = await Promise.all([
-        tx.customer.findFirstOrThrow({
-          where: { id: input.customerId, deletedAt: null },
-        }),
-        tx.worker.findFirstOrThrow({
-          where: { id: input.workerId, deletedAt: null },
-        }),
-      ]);
+      const worker = await tx.worker.findFirstOrThrow({
+        where: { id: input.workerId, deletedAt: null },
+      });
+      const customer =
+        input.customerId && input.customerId > 0
+          ? await tx.customer.findFirstOrThrow({
+              where: { id: input.customerId, deletedAt: null },
+            })
+          : null;
 
       // 1. Collect all unit IDs and validate
       const allUnitIds = input.items.flatMap((i) => i.unitIds);
@@ -901,7 +899,8 @@ export async function createAccessorySale(
       // (totalPrice/totalProfit will be updated after processing items)
       const sale = await tx.accessorySale.create({
         data: {
-          customerId: input.customerId,
+          customerId:
+            input.customerId && input.customerId > 0 ? input.customerId : null,
           workerId: input.workerId,
           feeWorker: input.feeWorker,
           discount: input.discount,
@@ -977,7 +976,7 @@ export async function createAccessorySale(
             afterRecordedBuyPrice: newMAC,
             logNote:
               `Terjual ${quantity} unit @${sellPricePerUnit} ` +
-              `(profit: ${profitPerUnit}/unit) ke ${customer.name} ` +
+              `(profit: ${profitPerUnit}/unit) ke ${customer?.name ?? "Tanpa Customer"} ` +
               `oleh worker ${worker.name} (fee: ${input.feeWorker}, diskon: ${input.discount})`,
           },
         });
@@ -1001,7 +1000,7 @@ export async function createAccessorySale(
         referenceType: "ACCESSORY_SALE",
         referenceId: sale.id,
         gapAmount: +totalPrice,
-        actionNote: `Penjualan Aksesoris #${sale.id} kepada ${customer.name}`,
+        actionNote: `Penjualan Aksesoris #${sale.id} kepada ${customer?.name ?? "Tanpa Customer"}`,
         transactionDate: new Date(),
       });
 
@@ -1142,7 +1141,7 @@ export async function getAccessorySales(
 
 interface UpdateAccessorySaleInput {
   saleId: number;
-  customerId: number;
+  customerId?: number | null;
   workerId: number;
   feeWorker: number;
   discount: number;
@@ -1157,9 +1156,6 @@ export async function updateAccessorySale(
 
     if (!input.items.length) {
       return { success: false, error: "Keranjang tidak boleh kosong." };
-    }
-    if (!input.customerId || input.customerId < 1) {
-      return { success: false, error: "Customer wajib dipilih." };
     }
     if (!input.workerId || input.workerId < 1) {
       return { success: false, error: "Worker wajib dipilih." };
@@ -1184,14 +1180,14 @@ export async function updateAccessorySale(
           },
         },
       });
-      const [nextCustomer, nextWorker] = await Promise.all([
-        tx.customer.findFirstOrThrow({
+      await tx.worker.findFirstOrThrow({
+        where: { id: input.workerId, deletedAt: null },
+      });
+      if (input.customerId && input.customerId > 0) {
+        await tx.customer.findFirstOrThrow({
           where: { id: input.customerId, deletedAt: null },
-        }),
-        tx.worker.findFirstOrThrow({
-          where: { id: input.workerId, deletedAt: null },
-        }),
-      ]);
+        });
+      }
 
       // 1. Release old units and delete old sale items
       const oldItemIds = sale.items.map((i) => i.id);
@@ -1302,7 +1298,8 @@ export async function updateAccessorySale(
       await tx.accessorySale.update({
         where: { id: sale.id },
         data: {
-          customerId: input.customerId,
+          customerId:
+            input.customerId && input.customerId > 0 ? input.customerId : null,
           workerId: input.workerId,
           feeWorker: input.feeWorker,
           discount: input.discount,
@@ -1426,7 +1423,7 @@ export async function deleteAccessorySale(
             afterRecordedBuyPrice: newMAC,
             logNote:
               `Hapus penjualan #${sale.id}: kembalikan ${item.quantity} unit ` +
-              `dari transaksi ${sale.customer.name} / worker ${sale.worker.name}`,
+              `dari transaksi ${sale.customer?.name ?? "Tanpa Customer"} / worker ${sale.worker.name}`,
           },
         });
       }

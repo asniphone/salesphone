@@ -638,8 +638,12 @@ export interface DashboardSummaryData {
   };
   accessory: {
     terjualThisMonth: number;
+    transaksiThisMonth: number;
+    modalThisMonth: number;
+    feeWorkerThisMonth: number;
     pendapatanThisMonth: number;
-    keuntunganThisMonth: number;
+    keuntunganKotorThisMonth: number;
+    keuntunganBersihThisMonth: number;
   };
   customer: {
     total: number;
@@ -653,11 +657,11 @@ export interface DashboardSummaryData {
   };
 }
 
-export async function getDashboardSummary(): Promise<ActionResult<DashboardSummaryData>> {
+export async function getDashboardSummary(
+  params: DateRangeParams = {},
+): Promise<ActionResult<DashboardSummaryData>> {
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const dateRange = buildDateRange(params);
 
     // 1. Unit
     const [unitAvailable, soldUnitsThisMonth] = await Promise.all([
@@ -666,7 +670,7 @@ export async function getDashboardSummary(): Promise<ActionResult<DashboardSumma
         where: {
           deletedAt: null,
           status: "SOLD",
-          soldAt: { gte: startOfMonth, lte: endOfMonth },
+          soldAt: dateRange ?? undefined,
         },
         select: { soldPrice: true, buyPrice: true, workerFee: true },
       }),
@@ -686,25 +690,32 @@ export async function getDashboardSummary(): Promise<ActionResult<DashboardSumma
     const accessorySalesThisMonth = await prisma.accessorySale.findMany({
       where: {
         deletedAt: null,
-        createdAt: { gte: startOfMonth, lte: endOfMonth },
+        createdAt: dateRange ?? undefined,
       },
       select: {
         totalPrice: true,
         totalProfit: true,
+        feeWorker: true,
         items: { select: { quantity: true } },
       },
     });
 
     let accTerjual = 0;
+    let accTransaksi = 0;
     let accPendapatan = 0;
-    let accKeuntungan = 0;
+    let accKeuntunganKotor = 0;
+    let accFeeWorker = 0;
     for (const sale of accessorySalesThisMonth) {
+      accTransaksi += 1;
       accPendapatan += sale.totalPrice;
-      accKeuntungan += sale.totalProfit;
+      accKeuntunganKotor += sale.totalProfit;
+      accFeeWorker += sale.feeWorker;
       for (const item of sale.items) {
         accTerjual += item.quantity;
       }
     }
+    const accKeuntunganBersih = accKeuntunganKotor - accFeeWorker;
+    const accModal = accPendapatan - accKeuntunganKotor;
 
     // 3. Customer
     const [totalCustomers, newCustomersThisMonth] = await Promise.all([
@@ -712,7 +723,7 @@ export async function getDashboardSummary(): Promise<ActionResult<DashboardSumma
       prisma.customer.count({
         where: {
           deletedAt: null,
-          createdAt: { gte: startOfMonth, lte: endOfMonth },
+          createdAt: dateRange ?? undefined,
         },
       }),
     ]);
@@ -739,8 +750,12 @@ export async function getDashboardSummary(): Promise<ActionResult<DashboardSumma
         },
         accessory: {
           terjualThisMonth: accTerjual,
+          transaksiThisMonth: accTransaksi,
+          modalThisMonth: accModal,
+          feeWorkerThisMonth: accFeeWorker,
           pendapatanThisMonth: accPendapatan,
-          keuntunganThisMonth: accKeuntungan,
+          keuntunganKotorThisMonth: accKeuntunganKotor,
+          keuntunganBersihThisMonth: accKeuntunganBersih,
         },
         customer: {
           total: totalCustomers,
@@ -790,11 +805,15 @@ export interface PdfAccessoryReportData {
     items: string;
     totalPrice: number;
     totalProfit: number;
+    feeWorker: number;
+    netProfit: number;
   }[];
   summary: {
     totalTransaksi: number;
     totalPendapatan: number;
-    totalKeuntungan: number;
+    totalKeuntunganKotor: number;
+    totalFeeWorker: number;
+    totalKeuntunganBersih: number;
   };
 }
 
@@ -858,8 +877,8 @@ export async function getPdfUnitReportData(
 }
 
 export async function getPdfAccessoryReportData(
-  dateRangeFrom: string,
-  dateRangeTo: string,
+  dateRangeFrom?: string,
+  dateRangeTo?: string,
 ): Promise<ActionResult<PdfAccessoryReportData>> {
   try {
     const dateRange = buildDateRange({ dateRangeFrom, dateRangeTo });
@@ -873,6 +892,7 @@ export async function getPdfAccessoryReportData(
         id: true,
         totalPrice: true,
         totalProfit: true,
+        feeWorker: true,
         createdAt: true,
         customer: { select: { name: true } },
         items: {
@@ -888,18 +908,23 @@ export async function getPdfAccessoryReportData(
     const salesData = sales.map((s) => ({
       id: s.id,
       date: s.createdAt.toLocaleDateString("id-ID"),
-      customer: s.customer.name,
+      customer: s.customer?.name ?? "-",
       items: s.items.map((i) => `${i.accessory.name} x${i.quantity}`).join(", "),
       totalPrice: s.totalPrice,
       totalProfit: s.totalProfit,
+      feeWorker: s.feeWorker,
+      netProfit: s.totalProfit - s.feeWorker,
     }));
 
     let totalPendapatan = 0;
-    let totalKeuntungan = 0;
+    let totalKeuntunganKotor = 0;
+    let totalFeeWorker = 0;
     for (const s of sales) {
       totalPendapatan += s.totalPrice;
-      totalKeuntungan += s.totalProfit;
+      totalKeuntunganKotor += s.totalProfit;
+      totalFeeWorker += s.feeWorker;
     }
+    const totalKeuntunganBersih = totalKeuntunganKotor - totalFeeWorker;
 
     return {
       success: true,
@@ -908,7 +933,9 @@ export async function getPdfAccessoryReportData(
         summary: {
           totalTransaksi: sales.length,
           totalPendapatan,
-          totalKeuntungan,
+          totalKeuntunganKotor,
+          totalFeeWorker,
+          totalKeuntunganBersih,
         },
       },
     };

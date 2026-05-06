@@ -223,7 +223,7 @@ export async function getLedgerReferenceDetail(
       base.reference = {
         title: `Penjualan Aksesoris #${sale.id}`,
         items: [
-          { label: "Customer", value: sale.customer.name },
+          { label: "Customer", value: sale.customer?.name ?? "-" },
           { label: "Worker", value: sale.worker.name },
           { label: "Subtotal", value: String(sale.items.reduce((s, i) => s + i.sellPricePerUnit * i.quantity, 0)) },
           { label: "Diskon", value: String(sale.discount) },
@@ -295,4 +295,3 @@ export async function getLedgerReferenceDetail(
     return { success: false, error: "Gagal mengambil detail ledger." };
   }
 }
-

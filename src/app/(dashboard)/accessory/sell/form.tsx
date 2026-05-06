@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAccessorySale } from "@/actions/accessory";
 import type { AccessoryForSale } from "@/actions/accessory";
@@ -90,6 +90,13 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
   const [sendInvoiceToCustomer, setSendInvoiceToCustomer] = useState(false);
   const [sendInvoiceToWorker, setSendInvoiceToWorker] = useState(false);
 
+  const hasSelectedCustomer = selectedCustomerId !== "";
+
+  useEffect(() => {
+    if (hasSelectedCustomer) return;
+    setSendInvoiceToCustomer(false);
+  }, [hasSelectedCustomer]);
+
   const filteredAccessories = accessories.filter((acc) =>
     acc.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -133,8 +140,8 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
       // Keep any SN-based selections
       const selectedSnIds = existing
         ? existing.selectedUnitIds.filter((id) =>
-            snUnits.some((u) => u.id === id),
-          )
+          snUnits.some((u) => u.id === id),
+        )
         : [];
       const selectedNoSnIds = noSnUnits.slice(0, clampedQty).map((u) => u.id);
       const allIds = [...selectedSnIds, ...selectedNoSnIds];
@@ -214,10 +221,6 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
       toast.error("Tambahkan minimal 1 item ke keranjang.");
       return;
     }
-    if (!selectedCustomerId) {
-      toast.error("Pilih atau tambahkan customer terlebih dahulu.");
-      return;
-    }
     if (!selectedWorkerId) {
       toast.error("Pilih worker terlebih dahulu.");
       return;
@@ -245,7 +248,7 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
       const parsedFeeWorker = parseInt(feeWorker, 10);
       const parsedDiscountValue = parseInt(discount, 10);
       const result = await createAccessorySale({
-        customerId: parseInt(selectedCustomerId, 10),
+        customerId: selectedCustomerId ? parseInt(selectedCustomerId, 10) : null,
         workerId: parseInt(selectedWorkerId, 10),
         feeWorker: parsedFeeWorker,
         discount: parsedDiscountValue,
@@ -259,7 +262,7 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
         toast.success(
           `Penjualan berhasil! Total: ${formatCurrency(result.data.totalPrice)}`,
         );
-        if (sendInvoiceToCustomer) {
+        if (sendInvoiceToCustomer && selectedCustomerId) {
           const invoiceResult = await sendAccessorySaleInvoiceWhatsApp(result.data.id);
           if (invoiceResult.success) {
             toast.success("Invoice customer WA berhasil dikirim.");
@@ -276,11 +279,11 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
           } else {
             toast.error(
               invoiceWorkerResult.error ??
-                "Penjualan berhasil, namun gagal mengirim invoice worker.",
+              "Penjualan berhasil, namun gagal mengirim invoice worker.",
             );
           }
         }
-        router.push("/accessory");
+        router.push("/accessory/history-sell");
       } else {
         toast.error(result.error ?? "Gagal memproses penjualan.");
       }
@@ -333,11 +336,10 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
                   const noSnQtyInCart = getNoSnQtyInCart(acc);
 
                   return (
-                    <div key={acc.id} className={`rounded-lg border transition-colors ${
-                      inCart
+                    <div key={acc.id} className={`rounded-lg border transition-colors ${inCart
                         ? "border-primary bg-primary/5"
                         : "hover:border-muted-foreground/30"
-                    }`}>
+                      }`}>
                       {/* Header row */}
                       <button
                         type="button"
@@ -546,6 +548,18 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
                   <Plus className="mr-1 h-3 w-3" />
                   Tambah Customer Baru
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs h-8"
+                  onClick={() => {
+                    setSelectedCustomerId("");
+                    setSendInvoiceToCustomer(false);
+                  }}
+                >
+                  Tanpa Customer
+                </Button>
               </div>
             )}
           </CardContent>
@@ -708,7 +722,6 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
           disabled={
             isPending ||
             cart.length === 0 ||
-            !selectedCustomerId ||
             !selectedWorkerId ||
             feeWorker.trim() === ""
           }
@@ -716,16 +729,12 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
           <Receipt className="mr-2 h-4 w-4" />
           {isPending ? "Memproses..." : "Proses Penjualan"}
         </Button>
-        {(!selectedCustomerId || cart.length === 0) && (
+        {(cart.length === 0) && (
           <p className="text-xs text-muted-foreground text-center">
-            {!selectedCustomerId && cart.length === 0
-              ? "Tambahkan item, pilih customer, dan isi worker untuk melanjutkan."
-              : !selectedCustomerId
-                ? "Pilih customer untuk melanjutkan."
-                : "Tambahkan item ke keranjang."}
+            Tambahkan item ke keranjang.
           </p>
         )}
-        {(selectedCustomerId && (!selectedWorkerId || feeWorker.trim() === "")) && (
+        {(!selectedWorkerId || feeWorker.trim() === "") && (
           <p className="text-xs text-muted-foreground text-center">
             Pilih worker dan isi fee worker untuk melanjutkan.
           </p>
@@ -746,6 +755,7 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
               <Checkbox
                 id="sendInvoiceCustomer"
                 checked={sendInvoiceToCustomer}
+                disabled={!hasSelectedCustomer}
                 onCheckedChange={(checked) => setSendInvoiceToCustomer(checked === true)}
               />
               <div className="space-y-1">
@@ -753,7 +763,9 @@ export function AccessorySellForm({ accessories, customers, workers }: Props) {
                   Kirim invoice ke customer
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Membutuhkan nomor WhatsApp customer.
+                  {!hasSelectedCustomer
+                    ? "Pilih customer terlebih dahulu untuk mengaktifkan opsi ini."
+                    : "Membutuhkan nomor WhatsApp customer."}
                 </p>
               </div>
             </div>

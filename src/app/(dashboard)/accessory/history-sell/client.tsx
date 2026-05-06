@@ -22,7 +22,6 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -52,7 +51,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Pencil, Trash2, MessageSquare, Search, Plus, Minus, ShoppingCart, Package } from "lucide-react";
+import { Eye, Pencil, Trash2, MessageSquare, Search, Plus, Minus, ShoppingCart } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import Image from "next/image";
 import { IMAGE_PLACEHOLDER } from "@/constants/common";
@@ -193,7 +192,7 @@ export function AccessoryHistorySellClient({
 
   function openEditDialog(sale: AccessorySaleHistoryData) {
     setEditingSale(sale);
-    setCustomerId(sale.customerId.toString());
+    setCustomerId(sale.customerId ? sale.customerId.toString() : "");
     setWorkerId(sale.workerId.toString());
     setFeeWorker(sale.feeWorker.toString());
     setDiscount(sale.discount.toString());
@@ -265,10 +264,6 @@ export function AccessoryHistorySellClient({
       toast.error("Keranjang tidak boleh kosong.");
       return;
     }
-    if (!customerId) {
-      toast.error("Customer wajib dipilih.");
-      return;
-    }
     if (!workerId) {
       toast.error("Worker wajib dipilih.");
       return;
@@ -304,7 +299,7 @@ export function AccessoryHistorySellClient({
 
       const result = await updateAccessorySale({
         saleId: editingSale.id,
-        customerId: parseInt(customerId, 10),
+        customerId: customerId ? parseInt(customerId, 10) : null,
         workerId: parseInt(workerId, 10),
         feeWorker: parsedFeeWorker,
         discount: parsedDiscount,
@@ -327,24 +322,11 @@ export function AccessoryHistorySellClient({
     (sum, item) => sum + item.accessory.sellPrice * item.selectedUnitIds.length,
     0,
   );
-  const editTotalProfit = cart.reduce((sum, item) => {
-    const units = item.selectedUnitIds.map(
-      (id) => item.accessory.availableUnits.find((u) => u.id === id)!,
-    );
-    return (
-      sum +
-      units.reduce(
-        (s, u) => s + (item.accessory.sellPrice - u.buyPrice),
-        0,
-      )
-    );
-  }, 0);
   const editParsedDiscount = Number.parseInt(discount, 10);
   const editEffectiveDiscount = Number.isNaN(editParsedDiscount) || editParsedDiscount < 0
     ? 0
     : Math.min(editParsedDiscount, editTotalPrice);
   const editTotalAfterDiscount = Math.max(editTotalPrice - editEffectiveDiscount, 0);
-  const editProfitAfterDiscount = editTotalProfit - editEffectiveDiscount;
 
   function handleDeleteSale() {
     if (!deletingSale) return;
@@ -386,8 +368,8 @@ export function AccessoryHistorySellClient({
                 <TableCell>{formatDateTime(sale.createdAt)}</TableCell>
                 <TableCell>
                   <div className="flex flex-col">
-                    <span className="font-medium">{sale.customer.name}</span>
-                    {sale.customer.phone && (
+                    <span className="font-medium">{sale.customer?.name ?? "-"}</span>
+                    {sale.customer?.phone && (
                       <span className="text-xs text-muted-foreground">
                         {sale.customer.phone}
                       </span>
@@ -480,17 +462,15 @@ export function AccessoryHistorySellClient({
           </DialogHeader>
           {detailSale && (
             <div className="flex items-center gap-2 flex-wrap">
-              {detailSale.customer?.phone && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => handleSendInvoice(detailSale.id)}
-                  disabled={isSendingInvoice}
-                >
-                  <MessageSquare className="mr-1 h-4 w-4" />
-                  {isSendingInvoice ? "Mengirim..." : "Kirim Invoice WA"}
-                </Button>
-              )}
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => handleSendInvoice(detailSale.id)}
+                disabled={isSendingInvoice || !detailSale.customer?.phone}
+              >
+                <MessageSquare className="mr-1 h-4 w-4" />
+                {isSendingInvoice ? "Mengirim..." : "Kirim Invoice WA"}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -517,9 +497,9 @@ export function AccessoryHistorySellClient({
                 </div>
                 <div className="rounded-lg border p-4">
                   <p className="text-xs text-muted-foreground">Customer</p>
-                  <p className="font-medium">{detailSale.customer.name}</p>
+                  <p className="font-medium">{detailSale.customer?.name ?? "-"}</p>
                   <p className="text-sm text-muted-foreground">
-                    {detailSale.customer.phone || "Tanpa nomor telepon"}
+                    {detailSale.customer?.phone || "Tanpa nomor telepon"}
                   </p>
                 </div>
                 <div className="rounded-lg border p-4">
@@ -909,18 +889,29 @@ export function AccessoryHistorySellClient({
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-xs">Customer</Label>
-                      <Select value={customerId} onValueChange={setCustomerId}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Pilih customer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {customers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.id.toString()}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-2">
+                        <Select value={customerId} onValueChange={setCustomerId}>
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Pilih customer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {customers.map((customer) => (
+                              <SelectItem key={customer.id} value={customer.id.toString()}>
+                                {customer.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-full text-xs"
+                          onClick={() => setCustomerId("")}
+                        >
+                          Tanpa Customer
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-2">

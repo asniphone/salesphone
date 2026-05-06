@@ -1,4 +1,10 @@
-export type DateRangePreset = "today" | "7days" | "thisMonth" | "lastMonth" | "custom";
+export type DateRangePreset =
+  | "today"
+  | "7days"
+  | "thisMonth"
+  | "lastMonth"
+  | "allTime"
+  | "custom";
 
 export interface DateRangeResult {
   from: string;
@@ -39,6 +45,9 @@ export function computeDateRange(
       const to = new Date(now.getFullYear(), now.getMonth(), 0);
       return { from: toISODate(from), to: toISODate(to), preset: "lastMonth" };
     }
+    case "allTime": {
+      return { from: "", to: "", preset: "allTime" };
+    }
     case "custom": {
       const from = customFrom
         ? (() => {
@@ -64,5 +73,6 @@ export const PRESET_LABELS: Record<DateRangePreset, string> = {
   "7days": "7 Hari Terakhir",
   thisMonth: "Bulan Ini",
   lastMonth: "1 Bulan Terakhir",
+  allTime: "Seluruh Waktu",
   custom: "Custom",
 };

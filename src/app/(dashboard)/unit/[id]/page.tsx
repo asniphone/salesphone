@@ -36,8 +36,7 @@ export default async function UnitDetailPage({ params }: UnitDetailPageProps) {
     notFound();
   }
 
-  const canPrintReceipt =
-    unitResult.data.status === "SOLD" && unitResult.data.customer !== null;
+  const canPrintReceipt = unitResult.data.status === "SOLD";
 
   const storeInformation = commonInformationResult.data ?? {
     storeName: "POS Internal",
@@ -68,10 +67,12 @@ export default async function UnitDetailPage({ params }: UnitDetailPageProps) {
               soldPrice: unitResult.data.soldPrice,
               dpAmount: unitResult.data.dpAmount,
               paymentType: unitResult.data.paymentType,
-              customer: {
-                name: unitResult.data.customer!.name,
-                phone: unitResult.data.customer!.phone,
-              },
+              customer: unitResult.data.customer
+                ? {
+                    name: unitResult.data.customer.name,
+                    phone: unitResult.data.customer.phone,
+                  }
+                : null,
               worker: unitResult.data.worker
                 ? { name: unitResult.data.worker.name }
                 : null,

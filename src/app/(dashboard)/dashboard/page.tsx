@@ -39,15 +39,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = await searchParams;
   const preset = (params.preset as DateRangePreset | undefined) ?? "thisMonth";
   const dateRange = computeDateRange(preset, params.from, params.to);
+  const periodLabel =
+    preset === "custom"
+      ? `${dateRange.from} s/d ${dateRange.to}`
+      : preset === "today"
+        ? "Hari Ini"
+        : preset === "7days"
+          ? "7 Hari Terakhir"
+          : preset === "thisMonth"
+            ? "Bulan Ini"
+            : preset === "allTime"
+              ? "Seluruh Waktu"
+              : "1 Bulan Terakhir";
 
   const [summaryResult, ciResult] = await Promise.all([
-    getDashboardSummary(),
+    getDashboardSummary({
+      dateRangeFrom: dateRange.from || undefined,
+      dateRangeTo: dateRange.to || undefined,
+    }),
     getCommonInformation(),
   ]);
   const storeName = ciResult.data?.storeName ?? "POS Internal";
   const data = summaryResult.data ?? {
     unit: { available: 0, soldThisMonth: 0, pendapatanThisMonth: 0, keuntunganThisMonth: 0 },
-    accessory: { terjualThisMonth: 0, pendapatanThisMonth: 0, keuntunganThisMonth: 0 },
+    accessory: {
+      terjualThisMonth: 0,
+      transaksiThisMonth: 0,
+      modalThisMonth: 0,
+      feeWorkerThisMonth: 0,
+      pendapatanThisMonth: 0,
+      keuntunganKotorThisMonth: 0,
+      keuntunganBersihThisMonth: 0,
+    },
     customer: { total: 0, newThisMonth: 0 },
     worker: { active: 0 },
     cashflow: { saldoAkhir: "0" },
@@ -105,7 +128,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Ikhtisar Penjualan</h2>
             <p className="text-muted-foreground text-sm mt-1">
-              Ringkasan data transaksi, inventaris, dan pelanggan — {preset === "custom" ? `${dateRange.from} s/d ${dateRange.to}` : preset === "today" ? "Hari Ini" : preset === "7days" ? "7 Hari Terakhir" : preset === "thisMonth" ? "Bulan Ini" : "1 Bulan Terakhir"}.
+              Ringkasan data transaksi, inventaris, dan pelanggan — {periodLabel}.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -114,17 +137,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               storeName={storeName}
               dateRangeFrom={dateRange.from}
               dateRangeTo={dateRange.to}
-              dateLabel={
-                preset === "custom"
-                  ? `${dateRange.from} s/d ${dateRange.to}`
-                  : preset === "today"
-                    ? "Hari Ini"
-                    : preset === "7days"
-                      ? "7 Hari Terakhir"
-                      : preset === "thisMonth"
-                        ? "Bulan Ini"
-                        : "1 Bulan Terakhir"
-              }
+              dateLabel={periodLabel}
             />
           </div>
         </div>
@@ -263,22 +276,49 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span className="font-medium text-lg">{data.accessory.terjualThisMonth} item</span>
                 </div>
                 <div className="flex items-center justify-between border-b pb-2">
+                  <span className="text-muted-foreground">Jumlah Transaksi</span>
+                  <span className="font-medium">{data.accessory.transaksiThisMonth} transaksi</span>
+                </div>
+                <div className="flex items-center justify-between border-b pb-2">
                   <span className="text-muted-foreground">Nilai Penjualan</span>
                   <span className="font-mono font-medium">{formatCurrency(data.accessory.pendapatanThisMonth)}</span>
+                </div>
+                <div className="flex items-center justify-between border-b pb-2">
+                  <span className="text-muted-foreground">Modal Penjualan</span>
+                  <span className="font-mono font-medium">{formatCurrency(data.accessory.modalThisMonth)}</span>
                 </div>
                 <div className="flex items-center justify-between pb-2">
                   <span className="text-muted-foreground flex items-center gap-1">
                     Laba Kotor
-                    {data.accessory.keuntunganThisMonth < 0 ? (
+                    {data.accessory.keuntunganKotorThisMonth < 0 ? (
                       <TrendingDown className="w-3 h-3 text-red-500" />
-                    ) : data.accessory.keuntunganThisMonth > 0 ? (
+                    ) : data.accessory.keuntunganKotorThisMonth > 0 ? (
                       <TrendingUp className="w-3 h-3 text-green-500" />
                     ) : (
                       <Minus className="w-3 h-3 text-muted-foreground" />
                     )}
                   </span>
-                  <span className={`font-mono font-bold ${getTextColorClass(data.accessory.keuntunganThisMonth)}`}>
-                    {formatCurrency(data.accessory.keuntunganThisMonth)}
+                  <span className={`font-mono font-bold ${getTextColorClass(data.accessory.keuntunganKotorThisMonth)}`}>
+                    {formatCurrency(data.accessory.keuntunganKotorThisMonth)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-b pb-2">
+                  <span className="text-muted-foreground">Fee Worker</span>
+                  <span className="font-mono font-medium">{formatCurrency(data.accessory.feeWorkerThisMonth)}</span>
+                </div>
+                <div className="flex items-center justify-between pb-2">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    Laba Bersih
+                    {data.accessory.keuntunganBersihThisMonth < 0 ? (
+                      <TrendingDown className="w-3 h-3 text-red-500" />
+                    ) : data.accessory.keuntunganBersihThisMonth > 0 ? (
+                      <TrendingUp className="w-3 h-3 text-green-500" />
+                    ) : (
+                      <Minus className="w-3 h-3 text-muted-foreground" />
+                    )}
+                  </span>
+                  <span className={`font-mono font-bold ${getTextColorClass(data.accessory.keuntunganBersihThisMonth)}`}>
+                    {formatCurrency(data.accessory.keuntunganBersihThisMonth)}
                   </span>
                 </div>
               </div>

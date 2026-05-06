@@ -32,7 +32,7 @@ export function ReportFilter({ preset, dateFrom, dateTo }: ReportFilterProps) {
     (updates: Record<string, string>) => {
       const params = new URLSearchParams(searchParams.toString());
       Object.entries(updates).forEach(([key, value]) => {
-        if (value && value !== "today") params.set(key, value);
+        if (value && value !== "thisMonth") params.set(key, value);
         else params.delete(key);
       });
       router.push(`?${params.toString()}`);

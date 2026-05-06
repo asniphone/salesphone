@@ -22,7 +22,7 @@ interface ReceiptUnitData {
   soldPrice: number | null;
   dpAmount: number | null;
   paymentType: PaymentType | null;
-  customer: { name: string; phone: string | null };
+  customer: { name: string; phone: string | null } | null;
   worker: { name: string } | null;
   workerFee: number | null;
 }
@@ -54,7 +54,6 @@ function formatDateTime(value: string | null): string {
 export function UnitReceiptPrintButton({ unit, storeInformation }: Props) {
   const soldPrice = unit.soldPrice ?? 0;
   const dpAmount = unit.dpAmount ?? 0;
-  const remaining = Math.max(soldPrice - dpAmount, 0);
   const paymentTypeLabel = unit.paymentType
     ? UNIT_PAYMENT_TYPE_CONFIG[unit.paymentType].label
     : "-";
@@ -104,7 +103,7 @@ export function UnitReceiptPrintButton({ unit, storeInformation }: Props) {
           <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>Customer</span>
             <span>:</span>
-            <span className={styles.tableValue}>{unit.customer.name}</span>
+            <span className={styles.tableValue}>{unit.customer?.name || "-"}</span>
           </div>
           <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>Email</span>
@@ -114,7 +113,7 @@ export function UnitReceiptPrintButton({ unit, storeInformation }: Props) {
           <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>HP</span>
             <span>:</span>
-            <span className={styles.tableValue}>{unit.customer.phone || "-"}</span>
+            <span className={styles.tableValue}>{unit.customer?.phone || "-"}</span>
           </div>
           {/* <div className={styles.tableHeader}>
             <span className={styles.tableLabel}>ID Card</span>
