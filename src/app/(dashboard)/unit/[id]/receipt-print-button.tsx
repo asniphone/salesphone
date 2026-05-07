@@ -136,7 +136,7 @@ export function UnitReceiptPrintButton({ unit, storeInformation }: Props) {
               {/* <span className={styles.textMuted}>Disc: 0,00</span> */}
               {unit.imei && (
                 <>
-                  <span className={styles.textMuted}>Serial number:</span>
+                  <span className={styles.textMuted}>IMEI:</span>
                   <span className={styles.textMuted}>{unit.imei}</span>
                 </>
               )}
